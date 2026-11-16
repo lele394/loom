@@ -1,0 +1,12 @@
+node_modules
+dist
+data
+.git
+.github
+coverage
+*.log
+tests
+design_docs
+conversation.md
+PLAN.md
+PLAN_REVIEW.md

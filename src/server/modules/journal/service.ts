@@ -1,0 +1,248 @@
+import type { Db } from '../../db/index';
+import type { Clock } from '../../core/clock';
+import type { ActivityService } from '../activity/service';
+import type { SettingsService } from '../settings/service';
+import type { JobQueue } from '../../worker/jobs';
+import { AppError, notFound } from '../../core/errors';
+import { newId } from '../../core/ids';
+import { parseJson } from '../../core/text';
+import { isValidDateString, todayIn } from '../../core/time';
+import { createProvider } from '../../ai';
+import { DIGEST_PROMPT_VERSION, buildDigestMessages } from '../../ai/prompts';
+import type { DailyDiff, Digest } from '../../../shared/types';
+
+interface DigestRow {
+  id: string;
+  user_id: string;
+  date: string;
+  timezone: string;
+  diff_json: string;
+  summary_md: string | null;
+  model: string | null;
+  status: 'pending' | 'ready' | 'failed';
+  generated_at: string | null;
+  regenerated_count: number;
+  source_event_seq: number | null;
+}
+
+function mapDigest(row: DigestRow, diffOverride?: DailyDiff): Digest {
+  return {
+    id: row.id,
+    date: row.date,
+    timezone: row.timezone,
+    diff: diffOverride ?? parseJson<DailyDiff>(row.diff_json, {
+      date: row.date,
+      timezone: row.timezone,
+      totals: { added: 0, updated: 0, completed: 0, removed: 0 },
+      byProject: [],
+      eventCount: 0,
+      eventSeqRange: null,
+    }),
+    summaryMarkdown: row.summary_md,
+    model: row.model,
+    status: row.status,
+    generatedAt: row.generated_at,
+    regeneratedCount: row.regenerated_count,
+    sourceEventSeq: row.source_event_seq,
+    stale: false,
+  };
+}
+
+export class JournalService {
+  constructor(
+    private readonly db: Db,
+    private readonly clock: Clock,
+    private readonly activity: ActivityService,
+    private readonly settings: SettingsService,
+    private readonly jobs: JobQueue,
+  ) {}
+
+  private user(id: string): { id: string; timezone: string; display_name: string } {
+    const row = this.db
+      .prepare('SELECT id, timezone, display_name FROM users WHERE id = ?')
+      .get(id) as { id: string; timezone: string; display_name: string } | undefined;
+    if (!row) throw notFound('User');
+    return row;
+  }
+
+  get(userId: string, date?: string): { digest: Digest | null; diff: DailyDiff } {
+    const user = this.user(userId);
+    const day = date ?? todayIn(user.timezone, this.clock);
+    if (!isValidDateString(day)) throw new AppError('bad_request', 'Invalid date.');
+    const diff = this.activity.diff(day, user.timezone);
+    const row = this.db
+      .prepare('SELECT * FROM daily_digests WHERE user_id = ? AND date = ?')
+      .get(userId, day) as DigestRow | undefined;
+    if (!row) return { digest: null, diff };
+    const latestSeq = this.activity.maxSeqInRange(day, user.timezone);
+    const digest = mapDigest(row, diff);
+    digest.stale = (row.source_event_seq ?? 0) < latestSeq;
+    return { digest, diff };
+  }
+
+  list(userId: string, from?: string, to?: string, limit = 60): Digest[] {
+    const clauses = ['user_id = ?'];
+    const params: unknown[] = [userId];
+    if (from) {
+      clauses.push('date >= ?');
+      params.push(from);
+    }
+    if (to) {
+      clauses.push('date <= ?');
+      params.push(to);
+    }
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM daily_digests WHERE ${clauses.join(' AND ')} ORDER BY date DESC LIMIT ?`,
+      )
+      .all(...params, limit) as DigestRow[];
+    return rows.map((row) => {
+      const user = this.user(userId);
+      const latestSeq = this.activity.maxSeqInRange(row.date, user.timezone);
+      const digest = mapDigest(row);
+      digest.stale = (row.source_event_seq ?? 0) < latestSeq;
+      return digest;
+    });
+  }
+
+  enqueueGeneration(
+    userId: string,
+    date: string,
+    force: boolean,
+    actorId: string,
+  ): { jobId: string | null } {
+    const user = this.user(userId);
+    if (!isValidDateString(date)) throw new AppError('bad_request', 'Invalid date.');
+    const latestSeq = this.activity.maxSeqInRange(date, user.timezone);
+    const key = force
+      ? `digest:${userId}:${date}:force:${this.clock.iso()}`
+      : `digest:${userId}:${date}:${latestSeq}`;
+    const jobId = this.jobs.enqueue('digest.generate', {
+      payload: { userId, date, force, actorId },
+      idempotencyKey: key,
+      maxAttempts: 3,
+      priority: 40,
+    });
+    return { jobId };
+  }
+
+  /** Job handler. Never invents events: the diff is the only input to the model. */
+  async runGeneration(userId: string, date: string, force: boolean, actorId?: string): Promise<Digest> {
+    const user = this.user(userId);
+    const diff = this.activity.diff(date, user.timezone);
+    const latestSeq = this.activity.maxSeqInRange(date, user.timezone);
+    const existing = this.db
+      .prepare('SELECT * FROM daily_digests WHERE user_id = ? AND date = ?')
+      .get(userId, date) as DigestRow | undefined;
+
+    if (existing && !force && existing.status === 'ready' && (existing.source_event_seq ?? 0) >= latestSeq) {
+      return mapDigest(existing, diff);
+    }
+
+    const config = this.settings.getProviderConfig();
+    let summary: string | null = null;
+    let model: string | null = null;
+    let failed = false;
+
+    if (config && (config.chatModel || config.kind === 'fake')) {
+      const provider = createProvider(config);
+      const prompt = buildDigestMessages(diff);
+      try {
+        let text = '';
+        for await (const chunk of provider.chat({
+          model: config.chatModel,
+          messages: [
+            { role: 'system', content: prompt.system },
+            { role: 'user', content: prompt.user },
+          ],
+          maxTokens: 700,
+          temperature: 0.1,
+          signal: AbortSignal.timeout(180_000),
+        })) {
+          if (chunk.type === 'text') text += chunk.text;
+        }
+        summary = text.trim();
+        model = `${config.chatModel || 'fake'} (${DIGEST_PROMPT_VERSION})`;
+      } catch (error) {
+        failed = true;
+        summary = null;
+        model = config.chatModel || 'fake';
+      }
+    }
+
+    const now = this.clock.iso();
+    const id = existing?.id ?? newId('dgt');
+    const regenerated = existing ? existing.regenerated_count + (existing.summary_md ? 1 : 0) : 0;
+    const tx = this.db.transaction(() => {
+      if (existing?.summary_md) {
+        this.db
+          .prepare(
+            `INSERT INTO digest_revisions (id, digest_id, summary_md, diff_json, model, created_at)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+          )
+          .run(newId('rev'), existing.id, existing.summary_md, existing.diff_json, existing.model, now);
+      }
+      this.db
+        .prepare(
+          `INSERT INTO daily_digests (id, user_id, date, timezone, diff_json, summary_md, model, status, generated_at, regenerated_count, source_event_seq)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(user_id, date) DO UPDATE SET
+             diff_json = excluded.diff_json,
+             summary_md = excluded.summary_md,
+             model = excluded.model,
+             status = excluded.status,
+             generated_at = excluded.generated_at,
+             regenerated_count = excluded.regenerated_count,
+             source_event_seq = excluded.source_event_seq`,
+        )
+        .run(
+          id,
+          userId,
+          date,
+          user.timezone,
+          JSON.stringify(diff),
+          summary,
+          model,
+          failed ? 'failed' : 'ready',
+          now,
+          regenerated,
+          latestSeq,
+        );
+      if (!failed) {
+        this.activity.record({
+          actorId: actorId ?? userId,
+          action: 'journal.digest_generated',
+          summary: `Generated the journal digest for ${date}`,
+          source: 'job',
+        });
+      }
+    });
+    tx();
+
+    if (failed) {
+      throw new AppError('provider_error', 'The digest summary could not be generated; the diff is preserved.');
+    }
+    const row = this.db
+      .prepare('SELECT * FROM daily_digests WHERE user_id = ? AND date = ?')
+      .get(userId, date) as DigestRow;
+    return mapDigest(row, diff);
+  }
+
+  revisions(userId: string, date: string): { id: string; summaryMarkdown: string; model: string | null; createdAt: string }[] {
+    const digest = this.db
+      .prepare('SELECT id FROM daily_digests WHERE user_id = ? AND date = ?')
+      .get(userId, date) as { id: string } | undefined;
+    if (!digest) return [];
+    const rows = this.db
+      .prepare(
+        'SELECT id, summary_md, model, created_at FROM digest_revisions WHERE digest_id = ? ORDER BY created_at DESC',
+      )
+      .all(digest.id) as { id: string; summary_md: string; model: string | null; created_at: string }[];
+    return rows.map((row) => ({
+      id: row.id,
+      summaryMarkdown: row.summary_md,
+      model: row.model,
+      createdAt: row.created_at,
+    }));
+  }
+}
