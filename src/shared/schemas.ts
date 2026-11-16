@@ -272,6 +272,18 @@ export const reextractMetadataSchema = z.object({
   apply: z.boolean().optional().default(false),
 });
 
+export const bulkReextractMetadataSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        id,
+        mode: pdfMetadataModeSchema.optional(),
+      }),
+    )
+    .min(1)
+    .max(200),
+});
+
 export const summarizeReferenceSchema = z.object({
   mode: pdfMetadataModeSchema.optional(),
   instructions: z.string().max(4000).optional().default(''),

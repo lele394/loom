@@ -153,7 +153,7 @@ Optional but recommended: Prettier (formatting), ESLint (React hooks rules). The
 - npm audit --audit-level=high  (allowed to warn)
 ```
 
-v1 baseline (measured 2026-11-16 on 65 tests): **64.3%** server line coverage overall, with **74.0%** on the auth service, **81.3%** on activity/diff and **80.9%** on backup/restore. The ≥85% target for auth and backup remains a v1.1 goal; global coverage is not a release gate because untested HTTP wiring dominates the denominator. Coverage is a signal, not a goal.
+v1 baseline (measured 2026-11-16 on 73 tests): **64.3%** server line coverage overall, with **74.0%** on the auth service, **81.3%** on activity/diff and **80.9%** on backup/restore. The ≥85% target for auth and backup remains a v1.1 goal; global coverage is not a release gate because untested HTTP wiring dominates the denominator. Coverage is a signal, not a goal.
 
 ## 9. Manual release checklist
 

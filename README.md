@@ -79,7 +79,7 @@ AI is also used for **literature ingestion**: drop one or more PDFs or links and
 - **Page images**: the first three pages as JPEGs to a vision-capable model.
 - **Text extraction**: the PDF's embedded text (fastest and fully local).
 
-The mode is configurable in Settings → AI & search and overridable per PDF submission. Reference pages have **Redo metadata**, which re-runs extraction and prints the raw model output, parsed fields and source preview before you apply anything. Literature uses checkbox selection and select-all for **bulk re-extraction**; each item can choose its own mode, results go into a processing list, and validated metadata is applied automatically. Reference pages keep **personal notes**, **AI summaries**, links and attachments separate; summaries are queued jobs that can be regenerated with extra instructions. **Read mode** focuses the PDF with notes, summary, bookmarks (page + ≤250-char note) and an optional AI chat panel. Without a provider, deterministic extraction (filename, DOI, page metadata) still works.
+The mode is configurable in Settings → AI & search and overridable per PDF submission. Reference pages have **Redo metadata**, which re-runs extraction and prints the raw model output, parsed fields and source preview before you apply anything. Literature uses checkbox selection and select-all for **bulk re-extraction**; each item can choose its own mode, results go into a processing list, and validated metadata is applied automatically. The processing list is backed by durable server jobs, so it survives refreshes and keeps working with the tab closed; dropped PDFs waiting to upload are persisted in IndexedDB and resume after a refresh. Reference pages keep **personal notes**, **AI summaries**, links and attachments separate; summaries are queued jobs that can be regenerated with extra instructions. **Read mode** focuses the PDF with notes, summary, bookmarks (page + ≤250-char note) and an optional AI chat panel. Without a provider, deterministic extraction (filename, DOI, page metadata) still works.
 
 URL capture also stores an **HTML archive + extracted text** attachment, indexes the text for search, and supports batches of up to ten links.
 
@@ -190,7 +190,7 @@ If you outgrow SQLite, the repository and `VectorIndex`/`BlobStore`/`JobHandler`
 
 ## Verification
 
-The repository ships with 65 tests covering auth/CSRF, notes and conflict handling, wikilinks/backlinks, tasks and ordering, FTS + chunk search + embeddings, PDF extraction and sniffing, AI streaming/citations, backup/restore, export integrity, timezone/DST and BibTeX.
+The repository ships with 73 tests covering auth/CSRF, notes and conflict handling, wikilinks/backlinks, tasks and ordering, FTS + chunk search + embeddings, PDF extraction and sniffing, AI streaming/citations, backup/restore, export integrity, timezone/DST and BibTeX.
 
 ```bash
 npm run typecheck && npm run check:boundaries && npm test && npm run build

@@ -109,7 +109,7 @@ RETURNING *;
 ```
 
 - Poll interval 1 s when idle, immediate when a job is enqueued. Concurrency 1 for v1 (prevents SQLite write contention and memory spikes); per-type concurrency can be added.
-- Timeout per job type: extraction 120 s, embeddings 120 s, digest 180 s, backup 600 s, others 60 s. A timeout aborts the handler and counts as a failed attempt.
+- Timeout per job type: extraction 120 s, embeddings 120 s, digest 180 s, reference summary/extraction 240 s, backup 600 s, others 60 s. A timeout aborts the handler and counts as a failed attempt.
 - On startup, any `running` rows are returned to `queued` (single-process assumption; documented).
 - Graceful shutdown waits up to 10 s for the current job, then requeues it.
 - Retryable: network errors, provider 429/5xx, timeouts, SQLITE_BUSY. Non-retryable: validation errors, missing object, unsupported file, auth errors.
@@ -124,6 +124,8 @@ RETURNING *;
 | `embed.chunks` | `{objectId?}` | Embed chunks missing vectors for current model | yes |
 | `extract.attachment` | `{attachmentId}` | PDF/CSV text extraction, page map, DOI detect, then index link | yes |
 | `reference.enrich` | `{referenceId}` | Crossref metadata by DOI | yes |
+| `reference.summarize` | `{referenceId,mode?,instructions?}` | AI summary, stored separately from notes | yes |
+| `reference.reextract` | `{referenceId,mode?,title,actorId}` | Re-run metadata extraction and apply the validated result | yes |
 | `digest.generate` | `{userId,date,force?}` | Compute diff, call AI if available, upsert digest | yes |
 | `backup.create` | `{kind}` | Snapshot + zip + verify + prune | yes |
 | `backup.verify` | `{backupId}` | Checksums + integrity check | no |
@@ -153,6 +155,8 @@ Schedules are computed in the user's timezone. If the server was off at the sche
 ## 4. Observability
 
 - `GET /jobs` lists queued/running/dead with type, attempts, error, timestamps.
+- Feature queues (metadata re-extraction) read their own type via `GET /references/extraction-jobs`, which merges active jobs with the last 24 h of finished ones. `dismissed_at` hides a finished job from that queue without deleting the operational history from Settings → Jobs.
+- Browser-side PDF uploads are not jobs: files waiting in the drop queue are persisted in IndexedDB so a reload can resume queued uploads. An upload interrupted mid-flight is shown as failed with a Retry action rather than being silently replayed, which avoids duplicate references.
 - Worker logs one line per job start/finish/failure with `jobId`, `type`, duration.
 - `GET /healthz` includes queue depth and oldest queued age; `readyz` fails if the DB is unwritable or migrations are pending.
 - Job telemetry counters (processed/failed by type) are kept in memory and exposed in `/meta` (P1).

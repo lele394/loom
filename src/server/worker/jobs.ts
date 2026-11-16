@@ -19,6 +19,7 @@ export interface JobRow {
   finished_at: string | null;
   last_error: string | null;
   idempotency_key: string | null;
+  dismissed_at: string | null;
   created_at: string;
 }
 
@@ -143,6 +144,54 @@ export class JobQueue {
 
   find(id: string): JobRow | null {
     return (this.db.prepare('SELECT * FROM jobs WHERE id = ?').get(id) as JobRow | undefined) ?? null;
+  }
+
+  /** Filtered listing used by feature queues; dismissed rows stay in the jobs history. */
+  listFiltered(
+    options: {
+      type?: string;
+      statuses?: JobStatus[];
+      includeDismissed?: boolean;
+      createdAfter?: string;
+      limit?: number;
+    } = {},
+  ): JobRow[] {
+    const clauses: string[] = [];
+    const params: (string | number)[] = [];
+    if (options.type) {
+      clauses.push('type = ?');
+      params.push(options.type);
+    }
+    if (options.statuses?.length) {
+      clauses.push(`status IN (${options.statuses.map(() => '?').join(',')})`);
+      params.push(...options.statuses);
+    }
+    if (!options.includeDismissed) clauses.push('dismissed_at IS NULL');
+    if (options.createdAfter) {
+      clauses.push('created_at >= ?');
+      params.push(options.createdAfter);
+    }
+    const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+    params.push(options.limit ?? 100);
+    return this.db
+      .prepare(`SELECT * FROM jobs ${where} ORDER BY created_at DESC LIMIT ?`)
+      .all(...params) as JobRow[];
+  }
+
+  dismiss(id: string): boolean {
+    const result = this.db
+      .prepare("UPDATE jobs SET dismissed_at = ? WHERE id = ? AND status IN ('succeeded','failed','dead')")
+      .run(this.clock.iso(), id);
+    return result.changes > 0;
+  }
+
+  dismissFinished(type: string): number {
+    const result = this.db
+      .prepare(
+        "UPDATE jobs SET dismissed_at = ? WHERE type = ? AND dismissed_at IS NULL AND status IN ('succeeded','failed','dead')",
+      )
+      .run(this.clock.iso(), type);
+    return result.changes;
   }
 
   stats(): { queued: number; running: number; dead: number; oldestQueuedMs: number } {

@@ -6,6 +6,7 @@ import {
   bibtexImportSchema,
   bookmarkCreateSchema,
   bookmarkUpdateSchema,
+  bulkReextractMetadataSchema,
   pdfMetadataModeSchema,
   referenceCreateSchema,
   referenceListQuerySchema,
@@ -17,6 +18,16 @@ import {
 } from '../../../shared/schemas';
 import { AppError } from '../../core/errors';
 import { sanitizeFilename } from '../../core/text';
+
+const EXTRACTION_JOB_TYPE = 'reference.reextract';
+const QUEUE_HISTORY_MS = 24 * 60 * 60 * 1000;
+
+function extractionStatus(status: string): 'queued' | 'processing' | 'done' | 'failed' {
+  if (status === 'running') return 'processing';
+  if (status === 'succeeded') return 'done';
+  if (status === 'queued') return 'queued';
+  return 'failed';
+}
 
 export async function literatureRoutes(app: FastifyInstance, ctx: Ctx): Promise<void> {
   app.get('/references', async (request, reply) => {
@@ -94,6 +105,91 @@ export async function literatureRoutes(app: FastifyInstance, ctx: Ctx): Promise<
       );
     },
   );
+
+  app.get('/references/extraction-jobs', async (_request, reply) => {
+    const cutoff = new Date(Date.now() - QUEUE_HISTORY_MS).toISOString();
+    const active = ctx.jobs.listFiltered({
+      type: EXTRACTION_JOB_TYPE,
+      statuses: ['queued', 'running'],
+      limit: 100,
+    });
+    const finished = ctx.jobs.listFiltered({
+      type: EXTRACTION_JOB_TYPE,
+      statuses: ['succeeded', 'failed', 'dead'],
+      createdAfter: cutoff,
+      limit: 100,
+    });
+    const jobs = [...active, ...finished].sort((a, b) => b.created_at.localeCompare(a.created_at));
+    const items = jobs
+      .map((job) => {
+        const payload = ctx.jobs.payload(job);
+        return {
+          id: job.id,
+          referenceId: String(payload.referenceId ?? ''),
+          payloadTitle: String(payload.title ?? 'Untitled reference'),
+          mode: String(payload.mode ?? 'ocr'),
+          status: extractionStatus(job.status),
+          error: job.last_error,
+          attempts: job.attempts,
+          createdAt: job.created_at,
+          finishedAt: job.finished_at,
+        };
+      })
+      .filter((job) => Boolean(job.referenceId));
+
+    const ids = [...new Set(items.map((item) => item.referenceId))];
+    const titles = new Map<string, string>();
+    if (ids.length) {
+      const rows = ctx.db
+        .prepare(
+          `SELECT l.id, o.title FROM literature l JOIN objects o ON o.id = l.id
+           WHERE l.id IN (${ids.map(() => '?').join(',')}) AND o.deleted_at IS NULL`,
+        )
+        .all(...ids) as { id: string; title: string }[];
+      for (const row of rows) titles.set(row.id, row.title);
+    }
+
+    return reply.send({
+      jobs: items.map(({ payloadTitle, ...item }) => ({
+        ...item,
+        title: titles.get(item.referenceId) ?? payloadTitle,
+      })),
+    });
+  });
+
+  app.post(
+    '/references/reextract-metadata',
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      if (!request.user) throw new Error('unauthenticated');
+      const input = parse(bulkReextractMetadataSchema, request.body);
+      const defaultMode = ctx.services.settings.getApp().pdfMetadataMode;
+      const jobs: {
+        id: string;
+        referenceId: string;
+        title: string;
+        mode: string;
+        status: 'queued';
+      }[] = [];
+      for (const item of input.items) {
+        const reference = ctx.services.literature.get(item.id);
+        const mode = item.mode ?? defaultMode;
+        const jobId = ctx.jobs.enqueue(EXTRACTION_JOB_TYPE, {
+          payload: { referenceId: item.id, mode, title: reference.title, actorId: request.user.id },
+          priority: 70,
+          maxAttempts: 3,
+        });
+        if (jobId) {
+          jobs.push({ id: jobId, referenceId: item.id, title: reference.title, mode, status: 'queued' });
+        }
+      }
+      return reply.status(202).send({ jobs });
+    },
+  );
+
+  app.post('/references/extraction-jobs/dismiss', async (_request, reply) => {
+    return reply.send({ dismissed: ctx.jobs.dismissFinished(EXTRACTION_JOB_TYPE) });
+  });
 
   app.post(
     '/references/:id/reextract-metadata',

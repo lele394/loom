@@ -1,6 +1,6 @@
 # Implementation plan
 
-Executable checklist for Loom v1. Checked items are implemented and verified (2026-11-16, 65 tests). Requirement IDs refer to `design_docs/01-requirements.md`.
+Executable checklist for Loom v1. Checked items are implemented and verified (2026-11-16, 73 tests). Requirement IDs refer to `design_docs/01-requirements.md`.
 
 **Legend:** `[ ]` todo · `[x]` done · `[~]` partial/deferred (with reason)
 
@@ -147,6 +147,12 @@ Executable checklist for Loom v1. Checked items are implemented and verified (20
   - read mode with focused PDF, notes, summary, bookmarks and optional AI chat
   - bookmarks API (page + 250-char note), migration 003, export/backup coverage
   - Firefox PDF annotation limitation documented; annotated-copy attach flow
+- [x] **P3.9 Durable processing queues** (extension, 2026-11-16)
+  - bulk metadata re-extraction moved to `reference.reextract` jobs; migration 004 adds `jobs.dismissed_at`
+  - literature queue hydrates from `GET /references/extraction-jobs` and polls until idle, so refresh or a closed tab loses nothing
+  - Clear finished dismisses rows from the queue while keeping the job history in Settings → Jobs
+  - PDF drop queue persisted in IndexedDB; queued uploads resume after reload, interrupted uploads are marked failed with Retry
+  - queue tests cover enqueue → reload view → apply → dismiss
 - [x] **P3.5 Routes, UI hooks, tests**
   - upload limits/sniff rejection, dedup, DOI not overwritten, SSRF cases, BibTeX round-trip, range requests
 
@@ -236,7 +242,7 @@ Executable checklist for Loom v1. Checked items are implemented and verified (20
 
 ## Phase 10 — Hardening and release
 
-- [~] **P10.1** Full suite green (65 tests); security-header, cache-header and markdown-XSS tests added. Measured server line coverage: 64.3% overall, auth 74.0%, activity 81.3%, backup 80.9% — the ≥85% target for auth/backup is deferred to v1.1.
+- [~] **P10.1** Full suite green (73 tests); security-header, cache-header and markdown-XSS tests added. Measured server line coverage: 64.3% overall, auth 74.0%, activity 81.3%, backup 80.9% — the ≥85% target for auth/backup is deferred to v1.1.
 - [x] **P10.2** `check:boundaries` passes: no module repo cross-imports, no feature-component cross-imports, no `dangerouslySetInnerHTML`, no `console.*` in server
 - [x] **P10.3** `typecheck` + production `build` green
 - [x] **P10.4** Manual smoke + restore drill on a copied data dir: setup → project → note → task → PDF → search → AI (fake) → digest → export → backup → restore → re-login

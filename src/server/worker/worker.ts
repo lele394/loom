@@ -13,6 +13,7 @@ const TIMEOUTS: Record<string, number> = {
   'backup.verify': 300_000,
   'search.reindex': 600_000,
   'reference.summarize': 240_000,
+  'reference.reextract': 240_000,
 };
 
 const NON_RETRYABLE = new Set([

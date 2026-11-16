@@ -9,6 +9,11 @@ import { PDF_METADATA_MODES, READING_STATUSES, type PdfMetadataMode, type Readin
 import type { ProjectOutlet } from '../../shared/projectContext';
 import type { Reference } from '../../../shared/types';
 import { useSession } from '../../app/session';
+import {
+  deleteFinishedPdfQueueItems,
+  listPdfQueue,
+  savePdfQueueItem,
+} from '../../shared/pdfQueueStore';
 
 type AddTab = 'manual' | 'url' | 'bibtex' | 'pdf';
 
@@ -19,16 +24,31 @@ interface QueueItem {
   title?: string;
   refId?: string;
   error?: string;
+  mode?: PdfMetadataMode | null;
 }
 
-interface MetadataQueueItem {
-  queueId: string;
+interface PendingPdfIngest {
+  item: QueueItem;
+  file: Blob;
+  mode?: PdfMetadataMode;
+  projectId: string | null;
+  createdAt: number;
+}
+
+interface ExtractionJob {
+  id: string;
   referenceId: string;
   title: string;
   mode: PdfMetadataMode;
   status: 'queued' | 'processing' | 'done' | 'failed';
-  error?: string;
+  error: string | null;
+  createdAt: string;
+  finishedAt: string | null;
 }
+
+const isActiveJob = (job: ExtractionJob): boolean =>
+  job.status === 'queued' || job.status === 'processing';
+
 
 export function LiteraturePage() {
   const outlet = useOutletContext<ProjectOutlet | undefined>();
@@ -57,16 +77,22 @@ export function LiteraturePage() {
   const dragCounter = useRef(0);
   const [ingesting, setIngesting] = useState<{ current: number; total: number } | null>(null);
   const [queue, setQueue] = useState<QueueItem[]>([]);
-  const pendingRef = useRef<{ item: QueueItem; file: File; mode?: PdfMetadataMode }[]>([]);
+  const pendingRef = useRef<PendingPdfIngest[]>([]);
   const processingRef = useRef(false);
   const [queueProcessing, setQueueProcessing] = useState(false);
+  const queueMetaRef = useRef(
+    new Map<
+      string,
+      { mode: PdfMetadataMode | null; projectId: string | null; createdAt: number; blob?: Blob }
+    >(),
+  );
+  const queueRestoredRef = useRef(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkItems, setBulkItems] = useState<{ id: string; title: string; mode: PdfMetadataMode }[]>([]);
-  const [metadataQueue, setMetadataQueue] = useState<MetadataQueueItem[]>([]);
-  const metadataPendingRef = useRef<MetadataQueueItem[]>([]);
-  const metadataProcessingRef = useRef(false);
-  const [metadataProcessing, setMetadataProcessing] = useState(false);
+  const [extractionJobs, setExtractionJobs] = useState<ExtractionJob[]>([]);
+  const extractionPollRef = useRef<number | null>(null);
 
   useEffect(() => {
     setSelected(new Set());
@@ -119,20 +145,25 @@ export function LiteraturePage() {
 
   const pdfMode = pdfModeOverride === 'default' ? undefined : pdfModeOverride;
 
-  const ingestPdfFile = async (file: File, modeOverride?: PdfMetadataMode): Promise<Reference> => {
-    const mode = modeOverride ?? pdfMode;
+  const ingestPdfFile = async (
+    file: Blob,
+    filename: string,
+    mode: PdfMetadataMode | undefined,
+    targetProjectId: string | null,
+  ): Promise<Reference> => {
+    const payload = file instanceof File ? file : new File([file], filename, { type: 'application/pdf' });
     const params = new URLSearchParams();
-    if (projectId) params.set('projectId', projectId);
+    if (targetProjectId) params.set('projectId', targetProjectId);
     if (mode) params.set('mode', mode);
     const suffix = params.toString() ? `?${params.toString()}` : '';
-    return api.upload<Reference>(`/references/ingest-pdf${suffix}`, file);
+    return api.upload<Reference>(`/references/ingest-pdf${suffix}`, payload);
   };
 
   const createFromPdf = async () => {
     if (!pdfFile) return;
     setBusy(true);
     try {
-      const reference = await ingestPdfFile(pdfFile, pdfMode);
+      const reference = await ingestPdfFile(pdfFile, pdfFile.name, pdfMode, projectId ?? null);
       reset();
       setAddOpen(false);
       navigate(`/literature/${reference.id}`);
@@ -147,30 +178,68 @@ export function LiteraturePage() {
     setQueue((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
   };
 
+  const persistQueueItem = (item: QueueItem, includeBlob: boolean) => {
+    const meta = queueMetaRef.current.get(item.id);
+    void savePdfQueueItem({
+      id: item.id,
+      name: item.name,
+      status: item.status,
+      ...(item.title ? { title: item.title } : {}),
+      ...(item.refId ? { refId: item.refId } : {}),
+      ...(item.error ? { error: item.error } : {}),
+      mode: meta?.mode ?? null,
+      projectId: meta?.projectId ?? null,
+      createdAt: meta?.createdAt ?? Date.now(),
+      ...(includeBlob && meta?.blob ? { blob: meta.blob } : {}),
+    });
+  };
+
   const pumpQueue = async () => {
     if (processingRef.current) return;
     processingRef.current = true;
     setQueueProcessing(true);
     while (pendingRef.current.length) {
       const entry = pendingRef.current.shift()!;
-      updateQueueItem(entry.item.id, { status: 'processing' });
+      updateQueueItem(entry.item.id, { status: 'processing', error: undefined });
+      persistQueueItem({ ...entry.item, status: 'processing' }, true);
       try {
-        const reference = await ingestPdfFile(entry.file, entry.mode);
+        const reference = await ingestPdfFile(entry.file, entry.item.name, entry.mode, entry.projectId);
+        const done: QueueItem = { ...entry.item, status: 'done', title: reference.title, refId: reference.id };
         updateQueueItem(entry.item.id, {
           status: 'done',
           title: reference.title,
           refId: reference.id,
+          error: undefined,
         });
+        const meta = queueMetaRef.current.get(entry.item.id);
+        if (meta) meta.blob = undefined;
+        persistQueueItem(done, false);
       } catch (error) {
-        updateQueueItem(entry.item.id, {
-          status: 'failed',
-          error: (error as Error).message,
-        });
+        const message = (error as Error).message;
+        updateQueueItem(entry.item.id, { status: 'failed', error: message });
+        persistQueueItem({ ...entry.item, status: 'failed', error: message }, true);
       }
     }
     processingRef.current = false;
     setQueueProcessing(false);
     references.reload();
+  };
+
+  const retryQueueItem = (id: string) => {
+    const item = queue.find((entry) => entry.id === id);
+    const meta = queueMetaRef.current.get(id);
+    if (!item || !meta?.blob) return;
+    const next: QueueItem = { ...item, status: 'queued', refId: undefined, error: undefined };
+    updateQueueItem(id, { status: 'queued', refId: undefined, error: undefined });
+    persistQueueItem(next, true);
+    pendingRef.current.push({
+      item: next,
+      file: meta.blob,
+      ...(meta.mode ? { mode: meta.mode } : {}),
+      projectId: meta.projectId,
+      createdAt: meta.createdAt,
+    });
+    void pumpQueue();
   };
 
   const enqueuePdfFiles = (files: File[]) => {
@@ -181,11 +250,22 @@ export function LiteraturePage() {
       toast('Drop PDF files or a URL.', 'error');
       return;
     }
-    const entries = pdfs.map((file) => ({
-      item: { id: crypto.randomUUID(), name: file.name, status: 'queued' as const },
-      file,
-      mode: pdfMode,
-    }));
+    const mode = pdfMode ?? null;
+    const targetProjectId = projectId ?? null;
+    const now = Date.now();
+    const entries: PendingPdfIngest[] = pdfs.map((file, index) => {
+      const createdAt = now + index;
+      const item: QueueItem = { id: crypto.randomUUID(), name: file.name, status: 'queued', mode };
+      queueMetaRef.current.set(item.id, { mode, projectId: targetProjectId, createdAt, blob: file });
+      persistQueueItem(item, true);
+      return {
+        item,
+        file,
+        ...(mode ? { mode } : {}),
+        projectId: targetProjectId,
+        createdAt,
+      };
+    });
     pendingRef.current.push(...entries);
     setQueue((current) => [...current, ...entries.map((entry) => entry.item)]);
     void pumpQueue();
@@ -269,34 +349,88 @@ export function LiteraturePage() {
     }
   };
 
-  const updateMetadataItem = (queueId: string, patch: Partial<MetadataQueueItem>) => {
-    setMetadataQueue((current) => current.map((item) => (item.queueId === queueId ? { ...item, ...patch } : item)));
+  const refreshExtractionJobs = async (): Promise<ExtractionJob[]> => {
+    try {
+      const data = await api.get<{ jobs: ExtractionJob[] }>('/references/extraction-jobs');
+      setExtractionJobs(data.jobs);
+      return data.jobs;
+    } catch {
+      return [];
+    }
   };
 
-  const pumpMetadataQueue = async () => {
-    if (metadataProcessingRef.current) return;
-    metadataProcessingRef.current = true;
-    setMetadataProcessing(true);
-    while (metadataPendingRef.current.length) {
-      const item = metadataPendingRef.current.shift()!;
-      updateMetadataItem(item.queueId, { status: 'processing', error: undefined });
-      try {
-        const result = await api.post<{ reference?: Reference; error?: string }>(
-          `/references/${item.referenceId}/reextract-metadata`,
-          { mode: item.mode, apply: true },
-        );
-        if (!result.reference) {
-          throw new Error(result.error ?? 'No metadata was produced.');
-        }
-        updateMetadataItem(item.queueId, { status: 'done', title: result.reference.title });
-      } catch (error) {
-        updateMetadataItem(item.queueId, { status: 'failed', error: (error as Error).message });
-      }
+  const stopExtractionPolling = () => {
+    if (extractionPollRef.current !== null) {
+      window.clearInterval(extractionPollRef.current);
+      extractionPollRef.current = null;
     }
-    metadataProcessingRef.current = false;
-    setMetadataProcessing(false);
-    references.reload();
   };
+
+  const startExtractionPolling = () => {
+    if (extractionPollRef.current !== null) return;
+    extractionPollRef.current = window.setInterval(() => {
+      void refreshExtractionJobs().then((jobs) => {
+        if (!jobs.some(isActiveJob)) {
+          stopExtractionPolling();
+          references.reload();
+        }
+      });
+    }, 2000);
+  };
+
+  useEffect(() => {
+    if (queueRestoredRef.current) return;
+    queueRestoredRef.current = true;
+
+    void (async () => {
+      const stored = await listPdfQueue();
+      if (!stored.length) return;
+      const restored: QueueItem[] = [];
+      for (const row of stored) {
+        queueMetaRef.current.set(row.id, {
+          mode: row.mode,
+          projectId: row.projectId,
+          createdAt: row.createdAt,
+          ...(row.blob ? { blob: row.blob } : {}),
+        });
+        const item: QueueItem = {
+          id: row.id,
+          name: row.name,
+          status: row.status,
+          mode: row.mode,
+          ...(row.title ? { title: row.title } : {}),
+          ...(row.refId ? { refId: row.refId } : {}),
+          ...(row.error ? { error: row.error } : {}),
+        };
+        if (row.status === 'processing') {
+          const message = 'The page reloaded during this upload. Check the library, then retry.';
+          const interrupted: QueueItem = { ...item, status: 'failed', error: message };
+          restored.push(interrupted);
+          persistQueueItem(interrupted, Boolean(row.blob));
+        } else {
+          restored.push(item);
+          if (row.status === 'queued' && row.blob) {
+            pendingRef.current.push({
+              item,
+              file: row.blob,
+              ...(row.mode ? { mode: row.mode } : {}),
+              projectId: row.projectId,
+              createdAt: row.createdAt,
+            });
+          }
+        }
+      }
+      setQueue((current) => [...restored, ...current]);
+      if (pendingRef.current.length) void pumpQueue();
+    })();
+
+    void refreshExtractionJobs().then((jobs) => {
+      if (jobs.some(isActiveJob)) startExtractionPolling();
+    });
+
+    return stopExtractionPolling;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const openBulkExtraction = () => {
     const items = list
@@ -306,24 +440,53 @@ export function LiteraturePage() {
     setBulkOpen(true);
   };
 
-  const startBulkExtraction = () => {
-    const queued: MetadataQueueItem[] = bulkItems.map((item) => ({
-      queueId: crypto.randomUUID(),
-      referenceId: item.id,
-      title: item.title,
-      mode: item.mode,
-      status: 'queued',
-    }));
-    metadataPendingRef.current.push(...queued);
-    setMetadataQueue((current) => [...current, ...queued]);
-    setBulkOpen(false);
-    setSelected(new Set());
-    void pumpMetadataQueue();
+  const startBulkExtraction = async () => {
+    setBulkBusy(true);
+    try {
+      await api.post('/references/reextract-metadata', {
+        items: bulkItems.map((item) => ({ id: item.id, mode: item.mode })),
+      });
+      const queued = bulkItems.length;
+      setBulkOpen(false);
+      setSelected(new Set());
+      const jobs = await refreshExtractionJobs();
+      if (jobs.some(isActiveJob)) startExtractionPolling();
+      toast(`Queued ${queued} extraction${queued === 1 ? '' : 's'}`, 'success');
+    } catch (error) {
+      toast((error as Error).message, 'error');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const clearFinishedExtractions = async () => {
+    try {
+      await api.post('/references/extraction-jobs/dismiss');
+      setExtractionJobs((current) => current.filter(isActiveJob));
+    } catch (error) {
+      toast((error as Error).message, 'error');
+    }
+  };
+
+  const clearFinishedPdfQueue = () => {
+    setQueue((current) => {
+      const remaining = current.filter(
+        (item) => item.status === 'queued' || item.status === 'processing',
+      );
+      for (const item of current) {
+        if (item.status !== 'queued' && item.status !== 'processing') {
+          queueMetaRef.current.delete(item.id);
+        }
+      }
+      return remaining;
+    });
+    void deleteFinishedPdfQueueItems();
   };
 
   const list = references.data?.references ?? [];
   const allSelected = list.length > 0 && list.every((reference) => selected.has(reference.id));
   const someSelected = list.some((reference) => selected.has(reference.id));
+  const activeExtractions = extractionJobs.filter(isActiveJob).length;
 
   return (
     <div
@@ -389,10 +552,7 @@ export function LiteraturePage() {
                 {queue.filter((item) => item.status === 'done').length} done ·{' '}
                 {queue.filter((item) => item.status === 'failed').length} failed
               </span>
-              <button
-                className="btn sm"
-                onClick={() => setQueue((current) => current.filter((item) => item.status === 'queued' || item.status === 'processing'))}
-              >
+              <button className="btn sm" onClick={clearFinishedPdfQueue}>
                 Clear finished
               </button>
             </div>
@@ -412,47 +572,48 @@ export function LiteraturePage() {
                 ) : (
                   <span className="small truncate" title={item.name}>{item.name}</span>
                 )}
+                {item.mode ? <span className="badge">{item.mode}</span> : null}
                 <span className={`tiny queue-status ${item.status}`}>{item.status}</span>
                 {item.error ? <span className="tiny error-text truncate" title={item.error}>{item.error}</span> : null}
+                {item.status === 'failed' && queueMetaRef.current.get(item.id)?.blob ? (
+                  <button className="btn sm" onClick={() => retryQueueItem(item.id)}>Retry</button>
+                ) : null}
               </div>
             ))}
           </div>
         </div>
       ) : null}
 
-      {metadataQueue.length ? (
+      {extractionJobs.length ? (
         <div className="card tight" style={{ marginBottom: 14 }}>
           <div className="row between" style={{ marginBottom: 8 }}>
             <strong className="small">
-              Metadata re-extraction {metadataProcessing ? '· working…' : ''}
+              Metadata re-extraction {activeExtractions ? '· working…' : ''}
             </strong>
             <div className="row">
               <span className="tiny faint">
-                {metadataQueue.filter((item) => item.status === 'done').length} done ·{' '}
-                {metadataQueue.filter((item) => item.status === 'failed').length} failed
+                {extractionJobs.filter((job) => job.status === 'done').length} done ·{' '}
+                {extractionJobs.filter((job) => job.status === 'failed').length} failed
               </span>
-              <button
-                className="btn sm"
-                onClick={() => setMetadataQueue((current) => current.filter((item) => item.status === 'queued' || item.status === 'processing'))}
-              >
+              <button className="btn sm" onClick={() => void clearFinishedExtractions()}>
                 Clear finished
               </button>
             </div>
           </div>
           <div className="stack sm">
-            {metadataQueue.map((item) => (
-              <div className="row" key={item.queueId} style={{ gap: 8 }}>
-                <span className={`status-dot ${item.status}`} title={item.status} />
-                {item.status === 'done' ? (
-                  <button className="queue-link" onClick={() => navigate(`/literature/${item.referenceId}`)}>
-                    {item.title}
+            {extractionJobs.map((job) => (
+              <div className="row" key={job.id} style={{ gap: 8 }}>
+                <span className={`status-dot ${job.status}`} title={job.status} />
+                {job.status === 'done' ? (
+                  <button className="queue-link" onClick={() => navigate(`/literature/${job.referenceId}`)}>
+                    {job.title}
                   </button>
                 ) : (
-                  <span className="small truncate">{item.title}</span>
+                  <span className="small truncate" title={job.title}>{job.title}</span>
                 )}
-                <span className="badge">{item.mode}</span>
-                <span className={`tiny queue-status ${item.status}`}>{item.status}</span>
-                {item.error ? <span className="tiny error-text truncate" title={item.error}>{item.error}</span> : null}
+                <span className="badge">{job.mode}</span>
+                <span className={`tiny queue-status ${job.status}`}>{job.status}</span>
+                {job.error ? <span className="tiny error-text truncate" title={job.error}>{job.error}</span> : null}
               </div>
             ))}
           </div>
@@ -594,8 +755,8 @@ export function LiteraturePage() {
               >
                 Use OCR for all
               </button>
-              <button className="btn primary" disabled={!bulkItems.length} onClick={startBulkExtraction}>
-                Queue {bulkItems.length} extraction{bulkItems.length === 1 ? '' : 's'}
+              <button className="btn primary" disabled={!bulkItems.length || bulkBusy} onClick={() => void startBulkExtraction()}>
+                {bulkBusy ? 'Queueing…' : `Queue ${bulkItems.length} extraction${bulkItems.length === 1 ? '' : 's'}`}
               </button>
             </>
           }

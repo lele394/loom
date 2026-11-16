@@ -155,6 +155,9 @@ Legend: 🔓 public bootstrap, 🔐 authenticated. All mutations require CSRF.
 | DELETE | `/bookmarks/:id` | |
 | GET | `/jobs/:id` | job status for summary polling |
 | POST | `/references/:id/reextract-metadata` | `{source?,mode?,apply?}` — returns raw output + parsed metadata; `apply:true` also applies it |
+| POST | `/references/reextract-metadata` | `{items:[{id,mode?}]}` → 202; enqueues durable `reference.reextract` jobs |
+| GET | `/references/extraction-jobs` | active + last-24h finished metadata jobs for the queue UI |
+| POST | `/references/extraction-jobs/dismiss` | dismiss finished extraction jobs from the queue (keeps job history) |
 | POST | `/objects/:id/attachments` | generic multipart upload |
 | GET | `/attachments/:id` | metadata |
 | GET | `/attachments/:id/download` | attachment disposition; PDFs may use `?inline=1` |

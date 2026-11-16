@@ -2,6 +2,8 @@ import type { Ctx } from '../ctx';
 import { Worker, type JobHandler } from './worker';
 import type { JobStatus } from './jobs';
 import type { AppConfig } from '../config';
+import { AppError } from '../core/errors';
+import type { PdfMetadataMode } from '../../shared/constants';
 
 function primaryUserId(ctx: Ctx): string {
   const row = ctx.db.prepare('SELECT id FROM users ORDER BY created_at ASC LIMIT 1').get() as
@@ -53,6 +55,25 @@ export function createWorker(ctx: Ctx): Worker {
         instructions: payload.instructions ? String(payload.instructions) : '',
         actorId: payload.actorId ? String(payload.actorId) : primaryUserId(ctx),
       });
+    },
+    'reference.reextract': async (payload) => {
+      const referenceId = String(payload.referenceId ?? '');
+      if (!referenceId) throw new AppError('validation_failed', 'Missing referenceId.');
+      const mode = payload.mode as PdfMetadataMode | undefined;
+      const result = await ctx.services.literature.reextractMetadata(
+        referenceId,
+        mode ? { mode } : {},
+      );
+      if (!Object.keys(result.metadata).length) {
+        throw result.error
+          ? new AppError('provider_error', result.error)
+          : new AppError('unsupported_file', 'No metadata could be extracted from this reference.');
+      }
+      await ctx.services.literature.applyExtractedMetadata(
+        referenceId,
+        result,
+        payload.actorId ? String(payload.actorId) : primaryUserId(ctx),
+      );
     },
     'digest.generate': async (payload) => {
       const userId = String(payload.userId ?? primaryUserId(ctx));
