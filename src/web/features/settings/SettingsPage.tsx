@@ -8,9 +8,9 @@ import { PALETTE_META, contrastRatio, contrastText } from '../../shared/theme';
 import { Empty, ErrorState, Field, Loading, Modal, Tabs, useConfirm, useToast } from '../../shared/ui';
 import { formatBytes, objectRoute, TypeBadge } from '../../shared/components';
 import { OBJECT_TYPES, PDF_METADATA_MODES, type PdfMetadataMode } from '../../../shared/constants';
-import type { BackupRecord, JobRecord, ObjectSummary, Project } from '../../../shared/types';
+import type { BackupRecord, GithubCredentialStatus, JobRecord, ObjectSummary, Project } from '../../../shared/types';
 
-type Tab = 'appearance' | 'ai' | 'data' | 'jobs' | 'account' | 'about';
+type Tab = 'appearance' | 'ai' | 'github' | 'data' | 'jobs' | 'account' | 'about';
 
 interface ProviderForm {
   id?: string;
@@ -64,6 +64,7 @@ export function SettingsPage() {
           {([
             ['appearance', 'Appearance', 'sun'],
             ['ai', 'AI & search', 'sparkles'],
+            ['github', 'GitHub', 'git'],
             ['data', 'Data & backup', 'archive'],
             ['jobs', 'Jobs', 'activity'],
             ['account', 'Account', 'settings'],
@@ -77,6 +78,7 @@ export function SettingsPage() {
         <div>
           {tab === 'appearance' ? <AppearanceSection /> : null}
           {tab === 'ai' ? <AiSection /> : null}
+          {tab === 'github' ? <GitHubSection /> : null}
           {tab === 'data' ? <DataSection /> : null}
           {tab === 'jobs' ? <JobsSection /> : null}
           {tab === 'account' ? <AccountSection /> : null}
@@ -383,6 +385,132 @@ function AiSection() {
           </div>
         </Modal>
       ) : null}
+    </div>
+  );
+}
+
+function GitHubSection() {
+  const { toast } = useToast();
+  const confirm = useConfirm();
+  const credential = useAsync(
+    () => api.get<{ github: GithubCredentialStatus }>('/settings').then((data) => data.github),
+    [],
+  );
+  const [token, setToken] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const save = async () => {
+    if (!token.trim()) return;
+    setBusy(true);
+    try {
+      const next = await api.put<GithubCredentialStatus>('/settings/github', { token });
+      credential.setData(next);
+      setToken('');
+      toast('GitHub token saved', 'success');
+    } catch (error) {
+      toast((error as Error).message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    const ok = await confirm({
+      title: 'Remove the account GitHub token?',
+      message: 'Repositories without their own token will no longer be able to pull private commits.',
+      confirmLabel: 'Remove token',
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      const next = await api.del<GithubCredentialStatus>('/settings/github');
+      credential.setData(next);
+      toast('GitHub token removed', 'success');
+    } catch (error) {
+      toast((error as Error).message, 'error');
+    }
+  };
+
+  const status = credential.data;
+
+  return (
+    <div className="stack" style={{ gap: 18 }}>
+      <div className="card stack">
+        <div className="row between" style={{ alignItems: 'flex-start' }}>
+          <div>
+            <h3 style={{ fontSize: 15 }}>Account GitHub token</h3>
+            <p className="small faint" style={{ marginTop: 4 }}>
+              Used by linked repositories that do not have their own token. Public repositories work without a token.
+            </p>
+          </div>
+          <a className="btn sm" href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noreferrer">
+            <Icon name="external" size={13} /> Create a token
+          </a>
+        </div>
+
+        {credential.loading ? <Loading rows={2} /> : null}
+        {credential.error ? <ErrorState error={credential.error} retry={credential.reload} /> : null}
+        {status ? (
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <span className={`badge ${status.hasToken ? 'success' : 'warning'}`}>
+              {status.hasToken ? 'token configured' : 'no token'}
+            </span>
+            {status.hasToken ? <span className="badge">…{status.hint.replace(/^…/, '')}</span> : null}
+            {status.login ? <span className="badge info">{status.login}</span> : null}
+            {status.tokenType ? <span className="badge">{status.tokenType}</span> : null}
+            {status.updatedAt ? <span className="tiny faint">updated {relativeTime(status.updatedAt)}</span> : null}
+          </div>
+        ) : null}
+
+        <Field label={status?.hasToken ? 'Replace token' : 'GitHub token'}>
+          <div className="row" style={{ gap: 6 }}>
+            <input
+              className="input grow"
+              type="password"
+              value={token}
+              onChange={(event) => setToken(event.target.value)}
+              placeholder="github_pat_… or ghp_…"
+              autoComplete="off"
+            />
+            <button className="btn primary" disabled={busy || !token.trim()} onClick={() => void save()}>
+              {busy ? 'Validating…' : 'Save token'}
+            </button>
+            {status?.hasToken ? (
+              <button className="btn danger" disabled={busy} onClick={() => void remove()}>
+                Remove
+              </button>
+            ) : null}
+          </div>
+        </Field>
+
+        <p className="tiny faint">
+          Tokens are encrypted at rest with a per-user key derived from the server master key. They are never returned
+          by the API. Hashing is not possible here because Loom must send the token to GitHub when pulling commits.
+        </p>
+      </div>
+
+      <div className="card stack">
+        <h3 style={{ fontSize: 15 }}>Recommended permissions</h3>
+        <p className="small">
+          Use a <strong>fine-grained personal access token</strong> from{' '}
+          <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noreferrer">
+            GitHub → Settings → Personal access tokens
+          </a>.
+        </p>
+        <div className="stack sm">
+          <div className="row between"><span className="small">Repository access</span><span className="badge">Only select repositories</span></div>
+          <div className="row between"><span className="small">Contents</span><span className="badge success">Read-only</span></div>
+          <div className="row between"><span className="small">Metadata</span><span className="badge success">Read-only (required)</span></div>
+          <div className="row between"><span className="small">Everything else</span><span className="badge">No access</span></div>
+        </div>
+        <p className="tiny faint">
+          Loom refuses classic tokens that advertise write-capable scopes such as <code>repo</code> or{' '}
+          <code>public_repo</code>. For fine-grained tokens GitHub does not expose granted permissions to the token
+          itself, so Loom validates the token and repository read access, and relies on you choosing read-only
+          permissions. The token is used only for repository metadata and commit history — no clone and no file
+          contents.
+        </p>
+      </div>
     </div>
   );
 }

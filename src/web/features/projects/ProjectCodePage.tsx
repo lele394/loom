@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { ProjectRepository, RepositoryCommit } from '../../../shared/types';
 import { api } from '../../shared/api';
 import { useAsync, formatDate, relativeTime, timeOf } from '../../shared/hooks';
@@ -134,7 +135,8 @@ export function ProjectCodePage() {
           <strong className="small">GitHub repositories</strong>
           <p className="small faint" style={{ marginTop: 4 }}>
             Link public or private repositories. Pulling history imports commit metadata only — no repository files
-            are downloaded. Each pull reads up to 1,000 recent commits.
+            are downloaded. Each pull reads up to 1,000 recent commits. Repositories without their own token use the{' '}
+            <Link to="/settings?tab=github">account GitHub token</Link>.
           </p>
         </div>
         <button className="btn primary sm" disabled={readOnly} onClick={() => setAddOpen(true)}>
@@ -288,16 +290,23 @@ export function ProjectCodePage() {
                 autoFocus
               />
             </Field>
-            <Field label="GitHub token (optional)" help="Needed for private repositories. Stored encrypted; use a read-only token.">
+            <Field
+              label="Repository-specific token (optional)"
+              help="Needed for private repositories unless an account token is set. Read-only fine-grained tokens only; write-capable classic scopes are refused."
+            >
               <input
                 className="input"
                 type="password"
                 value={token}
                 onChange={(event) => setToken(event.target.value)}
-                placeholder="ghp_…"
+                placeholder="github_pat_… or ghp_…"
                 autoComplete="off"
               />
             </Field>
+            <p className="tiny faint">
+              Leave this blank to use the general token in <Link to="/settings?tab=github">Settings → GitHub</Link>.
+              Tokens are encrypted at rest and never returned by the API.
+            </p>
           </div>
         </Modal>
       ) : null}
@@ -342,8 +351,8 @@ export function ProjectCodePage() {
               />
             </Field>
             <p className="tiny faint">
-              The token is encrypted at rest and only sent to the GitHub API when pulling commits or checking the
-              repository.
+              The token is validated against GitHub before saving. Write-capable classic scopes are refused. It is
+              encrypted at rest and only sent to the GitHub API when pulling commits or checking the repository.
             </p>
           </div>
         </Modal>

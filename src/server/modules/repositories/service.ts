@@ -1,10 +1,12 @@
 import type { Db } from '../../db/index';
 import type { Clock } from '../../core/clock';
 import type { ActivityService } from '../activity/service';
+import type { SettingsService } from '../settings/service';
 import type { AppConfig } from '../../config';
 import { AppError, notFound } from '../../core/errors';
 import { newId } from '../../core/ids';
 import { decryptSecret, encryptSecret } from '../../core/crypto';
+import { inspectGitHubToken } from '../../core/github';
 import type { ProjectRepository, RepositoryCommit } from '../../../shared/types';
 
 interface RepositoryRow {
@@ -122,6 +124,7 @@ export class RepositoryService {
     private readonly db: Db,
     private readonly clock: Clock,
     private readonly activity: ActivityService,
+    private readonly settings: SettingsService,
     private readonly config: AppConfig,
   ) {}
 
@@ -214,7 +217,11 @@ export class RepositoryService {
   ): Promise<ProjectRepository> {
     this.requireProject(projectId);
     const parsed = parseGitHubRepository(input.url);
-    const token = input.token?.trim() ?? '';
+    const repositoryToken = input.token?.trim() ?? '';
+    if (repositoryToken) {
+      await inspectGitHubToken(this.config.githubApiBase, repositoryToken);
+    }
+    const token = repositoryToken || this.settings.getGithubToken(actorId);
     const existing = this.db
       .prepare(
         'SELECT id FROM project_repositories WHERE project_id = ? AND lower(owner) = lower(?) AND lower(name) = lower(?)',
@@ -242,7 +249,7 @@ export class RepositoryService {
         owner,
         name,
         repo.html_url || `https://github.com/${owner}/${name}`,
-        token ? encryptSecret(token, this.config.masterKey) : null,
+        repositoryToken ? encryptSecret(repositoryToken, this.config.masterKey) : null,
         repo.default_branch || null,
         repo.private ? 1 : 0,
         now,
@@ -261,10 +268,11 @@ export class RepositoryService {
     });
   }
 
-  updateToken(id: string, token: string | null, actorId: string): ProjectRepository {
+  async updateToken(id: string, token: string | null, actorId: string): Promise<ProjectRepository> {
     const row = this.requireRow(id);
     this.requireProject(row.project_id);
     const clean = token?.trim() ?? '';
+    if (clean) await inspectGitHubToken(this.config.githubApiBase, clean);
     this.db
       .prepare('UPDATE project_repositories SET token_enc = ?, updated_at = ? WHERE id = ?')
       .run(clean ? encryptSecret(clean, this.config.masterKey) : null, this.clock.iso(), id);
@@ -301,7 +309,8 @@ export class RepositoryService {
   ): Promise<{ repository: ProjectRepository; imported: number; scanned: number }> {
     const row = this.requireRow(id);
     this.requireProject(row.project_id);
-    const token = decryptSecret(row.token_enc, this.config.masterKey);
+    const token =
+      decryptSecret(row.token_enc, this.config.masterKey) || this.settings.getGithubToken(actorId);
     const sinceValue =
       since ??
       (row.last_synced_at

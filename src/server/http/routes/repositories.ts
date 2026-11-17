@@ -31,7 +31,7 @@ export async function repositoryRoutes(app: FastifyInstance, ctx: Ctx): Promise<
     const { id } = request.params as { id: string };
     const input = parse(repositoryUpdateSchema, request.body);
     return reply.send(
-      ctx.services.repositories.updateToken(id, input.token ?? null, request.user.id),
+      await ctx.services.repositories.updateToken(id, input.token ?? null, request.user.id),
     );
   });
 

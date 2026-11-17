@@ -4,6 +4,7 @@ import { parse } from '../errors';
 import {
   appSettingsUpdateSchema,
   appearanceUpdateSchema,
+  githubTokenSchema,
   userSettingsUpdateSchema,
 } from '../../../shared/schemas';
 
@@ -16,6 +17,7 @@ export async function settingsRoutes(app: FastifyInstance, ctx: Ctx): Promise<vo
       preferences: ctx.services.settings.getUserSettings(request.user.id),
       user: request.user,
       providers: ctx.services.settings.listProviders(),
+      github: ctx.services.settings.getGithubCredential(request.user.id),
       limits: {
         maxUploadMb: ctx.services.settings.getApp().maxUploadMb,
         maxStorageGb: Math.round(ctx.config.maxStorageBytes / (1024 * 1024 * 1024)),
@@ -41,6 +43,17 @@ export async function settingsRoutes(app: FastifyInstance, ctx: Ctx): Promise<vo
       ctx.services.auth.updateProfile(request.user.id, { timezone: input.timezone });
     }
     return reply.send(ctx.services.settings.updateUserSettings(request.user.id, input));
+  });
+
+  app.put('/settings/github', async (request, reply) => {
+    if (!request.user) throw new Error('unauthenticated');
+    const input = parse(githubTokenSchema, request.body);
+    return reply.send(await ctx.services.settings.saveGithubToken(request.user.id, input.token));
+  });
+
+  app.delete('/settings/github', async (request, reply) => {
+    if (!request.user) throw new Error('unauthenticated');
+    return reply.send(ctx.services.settings.clearGithubToken(request.user.id));
   });
 
   app.patch('/settings/account', async (request, reply) => {

@@ -2,10 +2,11 @@ import type { Db } from '../../db/index';
 import type { Clock } from '../../core/clock';
 import { badRequest } from '../../core/errors';
 import { parseJson } from '../../core/text';
-import type { Appearance } from '../../../shared/types';
+import type { Appearance, GithubCredentialStatus } from '../../../shared/types';
 import type { AppConfig } from '../../config';
 import type { PdfMetadataMode } from '../../../shared/constants';
-import { decryptSecret, encryptSecret, maskSecret } from '../../core/crypto';
+import { decryptSecret, deriveContextKey, encryptSecret, maskSecret } from '../../core/crypto';
+import { inspectGitHubToken } from '../../core/github';
 import { newId } from '../../core/ids';
 
 export interface AppSettings {
@@ -115,6 +116,85 @@ export class SettingsService {
       )
       .run(userId, JSON.stringify(next), this.clock.iso());
     return next;
+  }
+
+  private githubKey(userId: string): Buffer {
+    return deriveContextKey(this.config.masterKey, `github-token:${userId}`);
+  }
+
+  getGithubCredential(userId: string): GithubCredentialStatus {
+    const row = this.db
+      .prepare('SELECT * FROM github_credentials WHERE user_id = ?')
+      .get(userId) as
+      | {
+          token_hint: string;
+          login: string | null;
+          token_type: 'classic' | 'fine-grained' | 'unknown';
+          scopes_json: string;
+          updated_at: string;
+        }
+      | undefined;
+    if (!row) {
+      return {
+        hasToken: false,
+        login: null,
+        hint: '',
+        tokenType: null,
+        scopes: [],
+        updatedAt: null,
+      };
+    }
+    return {
+      hasToken: true,
+      login: row.login,
+      hint: row.token_hint,
+      tokenType: row.token_type,
+      scopes: parseJson<string[]>(row.scopes_json, []),
+      updatedAt: row.updated_at,
+    };
+  }
+
+  getGithubToken(userId: string): string {
+    const row = this.db
+      .prepare('SELECT token_enc FROM github_credentials WHERE user_id = ?')
+      .get(userId) as { token_enc: string } | undefined;
+    return row ? decryptSecret(row.token_enc, this.githubKey(userId)) : '';
+  }
+
+  async saveGithubToken(userId: string, token: string): Promise<GithubCredentialStatus> {
+    const trimmed = token.trim();
+    const info = await inspectGitHubToken(this.config.githubApiBase, trimmed);
+    const now = this.clock.iso();
+    const hint = trimmed.length > 4 ? `…${trimmed.slice(-4)}` : '…';
+    this.db
+      .prepare(
+        `INSERT INTO github_credentials
+           (user_id, token_enc, token_hint, login, token_type, scopes_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(user_id) DO UPDATE SET
+           token_enc = excluded.token_enc,
+           token_hint = excluded.token_hint,
+           login = excluded.login,
+           token_type = excluded.token_type,
+           scopes_json = excluded.scopes_json,
+           updated_at = excluded.updated_at`,
+      )
+      .run(
+        userId,
+        encryptSecret(trimmed, this.githubKey(userId)),
+        hint,
+        info.login,
+        info.tokenType,
+        JSON.stringify(info.scopes),
+        now,
+        now,
+      );
+    return this.getGithubCredential(userId);
+  }
+
+  clearGithubToken(userId: string): GithubCredentialStatus {
+    this.db.prepare('DELETE FROM github_credentials WHERE user_id = ?').run(userId);
+    return this.getGithubCredential(userId);
   }
 
   getAppearance(userId: string): Appearance {

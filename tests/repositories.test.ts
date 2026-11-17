@@ -39,6 +39,17 @@ async function startGitHub() {
   server = createServer((req: IncomingMessage, res: ServerResponse) => {
     authHeaders.push(String(req.headers.authorization ?? ''));
     const url = new URL(req.url ?? '/', 'http://localhost');
+    if (url.pathname === '/user') {
+      if (String(req.headers.authorization ?? '').includes('write-token')) {
+        res.setHeader('x-oauth-scopes', 'repo, read:user');
+      }
+      json(res, 200, { login: 'leo' });
+      return;
+    }
+    if (url.pathname === '/rate_limit') {
+      json(res, 200, { resources: {} });
+      return;
+    }
     if (url.pathname === '/repos/example/paper-code') {
       json(res, 200, {
         name: 'paper-code',
@@ -73,6 +84,31 @@ afterEach(async () => {
 });
 
 describe('project repositories', () => {
+  it('stores an encrypted account token and refuses write-capable classic scopes', async () => {
+    const rejected = await harness.request('PUT', '/settings/github', { token: 'write-token' });
+    expect(rejected.status).toBe(400);
+    expect(rejected.body.error.message).toContain('write-capable');
+
+    const saved = await harness.request('PUT', '/settings/github', { token: 'secret-token' });
+    expect(saved.status).toBe(200);
+    expect(saved.body.hasToken).toBe(true);
+    expect(JSON.stringify(saved.body)).not.toContain('secret-token');
+    const stored = harness.ctx.db
+      .prepare('SELECT token_enc FROM github_credentials WHERE user_id = ?')
+      .get(harness.userId) as { token_enc: string };
+    expect(stored.token_enc).not.toContain('secret-token');
+    expect(harness.ctx.services.settings.getGithubToken(harness.userId)).toBe('secret-token');
+
+    const linked = await harness.request('POST', `/projects/${harness.projectId}/repositories`, {
+      url: 'https://github.com/example/paper-code',
+    });
+    expect(linked.status).toBe(201);
+    expect(linked.body.hasToken).toBe(false);
+    const synced = await harness.request('POST', `/repositories/${linked.body.id}/sync`, {});
+    expect(synced.status).toBe(200);
+    expect(synced.body.imported).toBe(2);
+  });
+
   it('links a private repository, imports commits once and adds them to the daily journal', async () => {
     const linked = await harness.request('POST', `/projects/${harness.projectId}/repositories`, {
       url: 'https://github.com/example/paper-code',

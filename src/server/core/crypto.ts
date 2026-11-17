@@ -2,6 +2,7 @@ import {
   createCipheriv,
   createDecipheriv,
   createHash,
+  createHmac,
   randomBytes,
   scryptSync,
   timingSafeEqual,
@@ -68,6 +69,11 @@ export function constantTimeEqual(a: string, b: string): boolean {
 
 export function deriveMasterKey(secret: string): Buffer {
   return scryptSync(secret, 'loom-master-key-v1', 32);
+}
+
+/** Derive a scoped key so one record's secret cannot be decrypted with another record's context. */
+export function deriveContextKey(key: Buffer, context: string): Buffer {
+  return createHmac('sha256', key).update(context).digest();
 }
 
 export function encryptSecret(plaintext: string, key: Buffer): string {

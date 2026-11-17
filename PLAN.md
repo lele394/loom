@@ -164,6 +164,7 @@ Executable checklist for Loom v1. Checked items are implemented and verified (20
   - raw dialog output is the metadata completion only; OCR text and the prompt are separate sections
 - [x] **P3.11 Linked GitHub repositories and commit timelines** (extension, 2026-11-17)
   - per-project repository links (multiple repos supported), public or private with an encrypted read-only token
+  - shared account GitHub token in Settings, per-repository token override, scoped-key AES-GCM storage, classic write-scope rejection and fine-grained setup guidance
   - commit metadata import via GitHub REST API (never a clone), deduplicated by SHA, capped at 1,000 recent commits per pull
   - commits timestamped by author date and added to project activity plus the matching daily journal diff
   - `digest@2` prompt includes imported commits; repository data covered by export/backup

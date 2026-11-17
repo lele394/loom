@@ -500,6 +500,10 @@ export const userSettingsUpdateSchema = z.object({
   timezone: z.string().min(1).max(80).optional(),
 });
 
+export const githubTokenSchema = z.object({
+  token: z.string().trim().min(8).max(1000),
+});
+
 // ── Backups / trash / jobs ──────────────────────────────────────────────
 export const backupCreateSchema = z.object({ kind: z.enum(['manual']).optional().default('manual') });
 export const backupRestoreFieldsSchema = z.object({ confirm: z.literal('RESTORE') });

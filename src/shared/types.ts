@@ -79,6 +79,15 @@ export interface ProjectCounts {
   questions: number;
 }
 
+export interface GithubCredentialStatus {
+  hasToken: boolean;
+  login: string | null;
+  hint: string;
+  tokenType: 'classic' | 'fine-grained' | 'unknown' | null;
+  scopes: string[];
+  updatedAt: string | null;
+}
+
 export interface ProjectRepository {
   id: string;
   projectId: string;
