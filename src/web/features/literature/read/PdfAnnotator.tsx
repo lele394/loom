@@ -4,6 +4,7 @@ import {
   useImperativeHandle,
   useRef,
   useState,
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type RefObject,
 } from 'react';
@@ -25,6 +26,43 @@ import type { ReadSaveStatus } from './status';
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
 type Tool = 'select' | 'text' | 'highlight' | 'ink' | 'note' | 'eraser';
+
+interface ReaderAppearance {
+  invert: boolean;
+  brightness: number;
+  contrast: number;
+  sepia: number;
+}
+
+const DEFAULT_READER_APPEARANCE: ReaderAppearance = {
+  invert: false,
+  brightness: 100,
+  contrast: 100,
+  sepia: 0,
+};
+
+function readReaderAppearance(): ReaderAppearance {
+  try {
+    const raw = localStorage.getItem('loom-pdf-reader-appearance');
+    if (!raw) return DEFAULT_READER_APPEARANCE;
+    const parsed = JSON.parse(raw) as Partial<ReaderAppearance>;
+    return {
+      invert: Boolean(parsed.invert),
+      brightness: Math.min(130, Math.max(50, Number(parsed.brightness) || 100)),
+      contrast: Math.min(160, Math.max(60, Number(parsed.contrast) || 100)),
+      sepia: Math.min(100, Math.max(0, Number(parsed.sepia) || 0)),
+    };
+  } catch {
+    return DEFAULT_READER_APPEARANCE;
+  }
+}
+
+function canvasFilter(appearance: ReaderAppearance): string {
+  const filters = [`brightness(${appearance.brightness}%)`, `contrast(${appearance.contrast}%)`];
+  if (appearance.sepia > 0) filters.push(`sepia(${appearance.sepia}%)`);
+  if (appearance.invert) filters.push('invert(1)', 'hue-rotate(180deg)');
+  return filters.join(' ');
+}
 
 type UndoEntry =
   | { kind: 'created'; annotation: PdfAnnotation }
@@ -86,6 +124,8 @@ export function PdfAnnotator({
   const [zoom, setZoom] = useState(1);
   const [currentPage, setCurrentPage] = useState(Math.max(1, initialPage));
   const [pageDraft, setPageDraft] = useState(String(Math.max(1, initialPage)));
+  const [appearance, setAppearance] = useState(readReaderAppearance);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [annotations, setAnnotations] = useState<PdfAnnotation[]>([]);
   const [tool, setTool] = useState<Tool>('select');
   const [color, setColor] = useState<string>(PDF_HIGHLIGHT_COLORS[0]);
@@ -96,6 +136,23 @@ export function PdfAnnotator({
   const undoRef = useRef<() => Promise<void>>(async () => undefined);
 
   const setStatus = useCallback((status: ReadSaveStatus) => onStatusChangeRef.current(status), []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('loom-pdf-reader-appearance', JSON.stringify(appearance));
+    } catch {
+      // Appearance still applies for this session if storage is disabled.
+    }
+  }, [appearance]);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSettingsOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [settingsOpen]);
 
   const pushUndo = useCallback((entry: UndoEntry) => {
     undoStackRef.current.push(entry);
@@ -381,9 +438,16 @@ export function PdfAnnotator({
 
   const pageScale = scale;
   const viewerWidth = pageWidth * pageScale;
+  const updateAppearance = (patch: Partial<ReaderAppearance>) => {
+    setAppearance((current) => ({ ...current, ...patch }));
+  };
 
   return (
-    <div className="pdf-reader" aria-label={`${title} reader`}>
+    <div
+      className="pdf-reader"
+      aria-label={`${title} reader`}
+      style={{ '--pdf-canvas-filter': canvasFilter(appearance) } as CSSProperties}
+    >
       <div className="pdf-reader-toolbar">
         <div className="row" style={{ gap: 3 }}>
           <button className="icon-btn sm" aria-label="Previous page" onClick={() => goToPage(currentPage - 1)}>
@@ -454,8 +518,115 @@ export function PdfAnnotator({
           <button className="icon-btn sm" aria-label="Zoom in" onClick={() => setZoom((value) => Math.min(2.5, value + 0.15))}>
             <Icon name="plus" size={14} />
           </button>
+          <button
+            className={`icon-btn sm ${settingsOpen ? 'active' : ''}`}
+            title="Reading appearance"
+            aria-label="Reading appearance"
+            aria-expanded={settingsOpen}
+            onClick={() => setSettingsOpen((value) => !value)}
+            style={settingsOpen ? { background: 'var(--accent-soft)', color: 'var(--text)' } : undefined}
+          >
+            <Icon name="settings" size={14} />
+          </button>
         </div>
       </div>
+
+      {settingsOpen ? (
+        <>
+          <div className="pdf-settings-backdrop" onClick={() => setSettingsOpen(false)} />
+          <div className="pdf-settings-panel" role="dialog" aria-label="Reading appearance">
+            <div className="row between" style={{ marginBottom: 10 }}>
+              <strong className="small">Reading appearance</strong>
+              <button className="icon-btn sm" aria-label="Close reading appearance" onClick={() => setSettingsOpen(false)}>
+                <Icon name="close" size={14} />
+              </button>
+            </div>
+
+            <div className="pdf-preset-row">
+              <button
+                className="btn sm"
+                onClick={() => setAppearance({ ...DEFAULT_READER_APPEARANCE })}
+              >
+                Default
+              </button>
+              <button
+                className="btn sm"
+                onClick={() => setAppearance({ invert: true, brightness: 82, contrast: 100, sepia: 0 })}
+              >
+                Night
+              </button>
+              <button
+                className="btn sm"
+                onClick={() => setAppearance({ invert: false, brightness: 95, contrast: 92, sepia: 35 })}
+              >
+                Warm
+              </button>
+              <button
+                className="btn sm"
+                onClick={() => setAppearance({ invert: false, brightness: 100, contrast: 135, sepia: 0 })}
+              >
+                Contrast
+              </button>
+            </div>
+
+            <label className="pdf-toggle-row">
+              <span>
+                <strong className="small">Invert colours</strong>
+                <span className="tiny faint">Dark background, light text. Best for low-light reading.</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={appearance.invert}
+                onChange={(event) => updateAppearance({ invert: event.target.checked })}
+              />
+            </label>
+
+            <div className="pdf-slider-row">
+              <div className="row between">
+                <span className="small">Brightness</span>
+                <span className="tiny faint">{appearance.brightness}%</span>
+              </div>
+              <input
+                type="range"
+                min={50}
+                max={130}
+                value={appearance.brightness}
+                onChange={(event) => updateAppearance({ brightness: Number(event.target.value) })}
+              />
+            </div>
+            <div className="pdf-slider-row">
+              <div className="row between">
+                <span className="small">Contrast</span>
+                <span className="tiny faint">{appearance.contrast}%</span>
+              </div>
+              <input
+                type="range"
+                min={60}
+                max={160}
+                value={appearance.contrast}
+                onChange={(event) => updateAppearance({ contrast: Number(event.target.value) })}
+              />
+            </div>
+            <div className="pdf-slider-row">
+              <div className="row between">
+                <span className="small">Warmth</span>
+                <span className="tiny faint">{appearance.sepia}%</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={appearance.sepia}
+                onChange={(event) => updateAppearance({ sepia: Number(event.target.value) })}
+              />
+            </div>
+
+            <p className="tiny faint" style={{ marginTop: 9 }}>
+              Filters apply to the PDF page only; annotations and selection stay readable. Settings are remembered.
+            </p>
+          </div>
+        </>
+      ) : null}
 
       <div className="pdf-scroll" ref={scrollRef}>
         {loading ? (

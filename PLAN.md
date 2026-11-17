@@ -175,6 +175,10 @@ Executable checklist for Loom v1. Checked items are implemented and verified (20
   - global Calendar destination aggregates every project with a chronological Upcoming bar
   - month grid supports multi-day events, click-to-create, edit/delete, archived-project read-only state
   - calendar activity recorded in the project timeline; export/backup coverage and API tests
+- [x] **P3.15 Reading comfort controls** (extension, 2026-11-17)
+  - persistent personal-note text scaling in read mode (75–300%) for editor and Markdown preview
+  - PDF appearance cog panel with night/invert, default, warm and contrast presets
+  - brightness, contrast and warmth sliders applied to the page canvas while annotations stay readable
 - [x] **P3.14 Protected Personal project** (extension, 2026-11-17)
   - migration 010 adds `projects.is_system`, unique system flag and the built-in Personal project with board columns
   - Personal is always listed first and restored automatically if missing, archived or deleted

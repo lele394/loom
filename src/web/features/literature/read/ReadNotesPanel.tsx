@@ -1,12 +1,27 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { ReferenceBookmark } from '../../../../shared/types';
 import { Icon } from '../../../shared/icons';
 import { Markdown } from '../../../shared/markdown';
 import type { ReadSaveStatus } from './status';
 import { SAVE_STATUS_LABEL } from './status';
 
+const NOTES_SCALE_MIN = 0.75;
+const NOTES_SCALE_MAX = 3;
+const NOTES_SCALE_STEP = 0.1;
+
 function bookmarkSnippet(bookmark: ReferenceBookmark): string {
   return `\n\n> [[p.${bookmark.page}]]${bookmark.note ? ` — ${bookmark.note}` : ''}\n`;
+}
+
+function readNotesScale(): number {
+  try {
+    const value = Number(localStorage.getItem('loom-read-notes-scale'));
+    return Number.isFinite(value) && value >= NOTES_SCALE_MIN && value <= NOTES_SCALE_MAX
+      ? value
+      : 1;
+  } catch {
+    return 1;
+  }
 }
 
 export function ReadNotesPanel({
@@ -28,6 +43,15 @@ export function ReadNotesPanel({
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [preview, setPreview] = useState(false);
+  const [scale, setScale] = useState(readNotesScale);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('loom-read-notes-scale', String(scale));
+    } catch {
+      // Storage may be disabled; scaling still works for this session.
+    }
+  }, [scale]);
 
   const apply = (before: string, after = '', block = false) => {
     const textarea = textareaRef.current;
@@ -78,8 +102,14 @@ export function ReadNotesPanel({
 
   const words = value.trim() ? value.trim().split(/\s+/).length : 0;
 
+  const changeScale = (delta: number) => {
+    setScale((current) =>
+      Math.round(Math.min(NOTES_SCALE_MAX, Math.max(NOTES_SCALE_MIN, current + delta)) * 10) / 10,
+    );
+  };
+
   return (
-    <div className="read-notes">
+    <div className="read-notes" style={{ '--notes-scale': scale } as CSSProperties}>
       <div className="read-editor-toolbar">
         <button className="icon-btn sm" title="Heading" aria-label="Heading" onClick={() => apply('## ', '', true)}>H</button>
         <button className="icon-btn sm" title="Bold (Ctrl+B)" aria-label="Bold" onClick={() => apply('**', '**')}><strong>B</strong></button>
@@ -111,6 +141,33 @@ export function ReadNotesPanel({
           </select>
         ) : null}
         <span className="grow" />
+        <div className="read-notes-scale" role="group" aria-label="Note text size">
+          <button
+            className="icon-btn sm"
+            title="Smaller note text"
+            aria-label="Smaller note text"
+            disabled={scale <= NOTES_SCALE_MIN}
+            onClick={() => changeScale(-NOTES_SCALE_STEP)}
+          >
+            <Icon name="minus" size={12} />
+          </button>
+          <button
+            className="btn ghost sm"
+            title="Reset note text size to 100%"
+            onClick={() => setScale(1)}
+          >
+            {Math.round(scale * 100)}%
+          </button>
+          <button
+            className="icon-btn sm"
+            title="Larger note text"
+            aria-label="Larger note text"
+            disabled={scale >= NOTES_SCALE_MAX}
+            onClick={() => changeScale(NOTES_SCALE_STEP)}
+          >
+            <Icon name="plus" size={12} />
+          </button>
+        </div>
         <button
           className={`btn ghost sm ${preview ? 'active' : ''}`}
           onClick={() => setPreview((current) => !current)}
