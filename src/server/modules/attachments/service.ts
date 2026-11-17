@@ -14,7 +14,7 @@ import { newId } from '../../core/ids';
 import { parseJson } from '../../core/text';
 import { parseCsvPreview } from '../../core/csv';
 import { extractPdf } from '../../core/pdf';
-import type { Attachment } from '../../../shared/types';
+import type { Attachment, PdfAnnotation, PdfAnnotationGeometry } from '../../../shared/types';
 
 interface AttachmentRow {
   id: string;
@@ -30,6 +30,44 @@ interface AttachmentRow {
   meta_json: string;
   created_at: string;
   extracted_at: string | null;
+}
+
+interface PdfAnnotationRow {
+  id: string;
+  attachment_id: string;
+  page: number;
+  kind: PdfAnnotation['kind'];
+  color: string;
+  geometry_json: string;
+  text: string;
+  created_at: string;
+  updated_at: string;
+}
+
+function mapPdfAnnotation(row: PdfAnnotationRow): PdfAnnotation {
+  return {
+    id: row.id,
+    attachmentId: row.attachment_id,
+    page: row.page,
+    kind: row.kind,
+    color: row.color,
+    geometry: parseJson<PdfAnnotationGeometry>(row.geometry_json, {}),
+    text: row.text,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function assertAnnotationGeometry(kind: PdfAnnotation['kind'], geometry: PdfAnnotationGeometry): void {
+  if (kind === 'ink') {
+    if (!geometry.points || geometry.points.length < 2) {
+      throw new AppError('bad_request', 'Ink annotations need at least two points.');
+    }
+    return;
+  }
+  if (!geometry.rect) {
+    throw new AppError('bad_request', 'This annotation needs a rectangle.');
+  }
 }
 
 function mapAttachment(row: AttachmentRow): Attachment {
@@ -317,6 +355,93 @@ export class AttachmentService {
       });
     });
     tx();
+  }
+
+  listAnnotations(attachmentId: string): PdfAnnotation[] {
+    this.get(attachmentId);
+    const rows = this.db
+      .prepare('SELECT * FROM pdf_annotations WHERE attachment_id = ? ORDER BY page ASC, created_at ASC')
+      .all(attachmentId) as PdfAnnotationRow[];
+    return rows.map(mapPdfAnnotation);
+  }
+
+  createAnnotation(
+    attachmentId: string,
+    input: {
+      page: number;
+      kind: PdfAnnotation['kind'];
+      color: string;
+      geometry: PdfAnnotationGeometry;
+      text?: string;
+    },
+    actorId: string,
+  ): PdfAnnotation {
+    const attachment = this.get(attachmentId);
+    const object = this.objects.requireRow(attachment.objectId);
+    this.objects.ensureProjectWritable(object.project_id);
+    assertAnnotationGeometry(input.kind, input.geometry);
+    const id = newId('ann');
+    const now = this.clock.iso();
+    this.db
+      .prepare(
+        `INSERT INTO pdf_annotations
+           (id, attachment_id, page, kind, color, geometry_json, text, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        attachmentId,
+        input.page,
+        input.kind,
+        input.color,
+        JSON.stringify(input.geometry),
+        (input.text ?? '').slice(0, 2000),
+        now,
+        now,
+      );
+    this.objects.bumpVersion(object.id, actorId);
+    return this.listAnnotations(attachmentId).find((annotation) => annotation.id === id)!;
+  }
+
+  updateAnnotation(
+    annotationId: string,
+    input: { color?: string; geometry?: PdfAnnotationGeometry; text?: string },
+    actorId: string,
+  ): PdfAnnotation {
+    const row = this.db.prepare('SELECT * FROM pdf_annotations WHERE id = ?').get(annotationId) as
+      | PdfAnnotationRow
+      | undefined;
+    if (!row) throw notFound('Annotation');
+    const attachment = this.get(row.attachment_id);
+    const object = this.objects.requireRow(attachment.objectId);
+    this.objects.ensureProjectWritable(object.project_id);
+    const geometry = input.geometry ?? parseJson<PdfAnnotationGeometry>(row.geometry_json, {});
+    assertAnnotationGeometry(row.kind, geometry);
+    this.db
+      .prepare(
+        'UPDATE pdf_annotations SET color = ?, geometry_json = ?, text = ?, updated_at = ? WHERE id = ?',
+      )
+      .run(
+        input.color ?? row.color,
+        JSON.stringify(geometry),
+        (input.text ?? row.text).slice(0, 2000),
+        this.clock.iso(),
+        annotationId,
+      );
+    this.objects.bumpVersion(object.id, actorId);
+    return mapPdfAnnotation(this.db.prepare('SELECT * FROM pdf_annotations WHERE id = ?').get(annotationId) as PdfAnnotationRow);
+  }
+
+  deleteAnnotation(annotationId: string, actorId: string): void {
+    const row = this.db.prepare('SELECT * FROM pdf_annotations WHERE id = ?').get(annotationId) as
+      | PdfAnnotationRow
+      | undefined;
+    if (!row) throw notFound('Annotation');
+    const attachment = this.get(row.attachment_id);
+    const object = this.objects.requireRow(attachment.objectId);
+    this.objects.ensureProjectWritable(object.project_id);
+    this.db.prepare('DELETE FROM pdf_annotations WHERE id = ?').run(annotationId);
+    this.objects.bumpVersion(object.id, actorId);
   }
 
   async extract(attachmentId: string): Promise<void> {

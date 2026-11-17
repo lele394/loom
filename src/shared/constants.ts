@@ -53,6 +53,11 @@ export type Priority = (typeof PRIORITIES)[number];
 export const READING_STATUSES = ['unread', 'reading', 'reviewed', 'archived'] as const;
 export const PDF_METADATA_MODES = ['text', 'images', 'ocr'] as const;
 export type PdfMetadataMode = (typeof PDF_METADATA_MODES)[number];
+
+export const PDF_ANNOTATION_KINDS = ['highlight', 'ink', 'note'] as const;
+export type PdfAnnotationKind = (typeof PDF_ANNOTATION_KINDS)[number];
+
+export const PDF_HIGHLIGHT_COLORS = ['#f2c94c', '#7cc7a0', '#7fb8e6', '#e89ab5'] as const;
 export type ReadingStatus = (typeof READING_STATUSES)[number];
 
 export const REFERENCE_TYPES = [

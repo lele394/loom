@@ -7,6 +7,7 @@ import type {
   NoteTemplate,
   ObjectType,
   Palette,
+  PdfAnnotationKind,
   Priority,
   QuestionStatus,
   ReadingStatus,
@@ -217,6 +218,35 @@ export interface ReferenceBookmark {
   referenceId: string;
   page: number;
   note: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PdfPoint {
+  x: number;
+  y: number;
+}
+
+export interface PdfRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface PdfAnnotationGeometry {
+  rect?: PdfRect;
+  points?: PdfPoint[];
+}
+
+export interface PdfAnnotation {
+  id: string;
+  attachmentId: string;
+  page: number;
+  kind: PdfAnnotationKind;
+  color: string;
+  geometry: PdfAnnotationGeometry;
+  text: string;
   createdAt: string;
   updatedAt: string;
 }

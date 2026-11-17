@@ -14,6 +14,7 @@ import {
   READING_STATUSES,
   REFERENCE_TYPES,
   PDF_METADATA_MODES,
+  PDF_ANNOTATION_KINDS,
 } from './constants';
 
 const id = z.string().min(3).max(64);
@@ -297,6 +298,33 @@ export const bookmarkCreateSchema = z.object({
 export const bookmarkUpdateSchema = z.object({
   page: z.number().int().min(1).max(50_000).optional(),
   note: z.string().max(250).optional(),
+});
+
+const normalizedCoord = z.number().finite().min(-0.05).max(1.05);
+const pdfPointSchema = z.object({ x: normalizedCoord, y: normalizedCoord });
+const pdfRectSchema = z.object({
+  x: normalizedCoord,
+  y: normalizedCoord,
+  width: z.number().finite().min(0).max(1.1),
+  height: z.number().finite().min(0).max(1.1),
+});
+const pdfGeometrySchema = z.object({
+  rect: pdfRectSchema.optional(),
+  points: z.array(pdfPointSchema).max(4000).optional(),
+});
+
+export const pdfAnnotationCreateSchema = z.object({
+  page: z.number().int().min(1).max(50_000),
+  kind: z.enum(PDF_ANNOTATION_KINDS),
+  color: hexColor.optional().default('#f2c94c'),
+  geometry: pdfGeometrySchema,
+  text: z.string().max(2000).optional().default(''),
+});
+
+export const pdfAnnotationUpdateSchema = z.object({
+  color: hexColor.optional(),
+  geometry: pdfGeometrySchema.optional(),
+  text: z.string().max(2000).optional(),
 });
 
 export const bibtexImportSchema = z.object({
