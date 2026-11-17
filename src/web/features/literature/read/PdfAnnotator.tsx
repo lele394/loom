@@ -24,7 +24,12 @@ import type { ReadSaveStatus } from './status';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
-type Tool = 'select' | 'highlight' | 'ink' | 'note' | 'eraser';
+type Tool = 'select' | 'text' | 'highlight' | 'ink' | 'note' | 'eraser';
+
+type UndoEntry =
+  | { kind: 'created'; annotation: PdfAnnotation }
+  | { kind: 'deleted'; annotation: PdfAnnotation }
+  | { kind: 'updated'; before: PdfAnnotation; after: PdfAnnotation };
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 
@@ -86,8 +91,17 @@ export function PdfAnnotator({
   const [color, setColor] = useState<string>(PDF_HIGHLIGHT_COLORS[0]);
   const [noteEditor, setNoteEditor] = useState<NoteEditorState | null>(null);
   const [noteBusy, setNoteBusy] = useState(false);
+  const [canUndo, setCanUndo] = useState(false);
+  const undoStackRef = useRef<UndoEntry[]>([]);
+  const undoRef = useRef<() => Promise<void>>(async () => undefined);
 
   const setStatus = useCallback((status: ReadSaveStatus) => onStatusChangeRef.current(status), []);
+
+  const pushUndo = useCallback((entry: UndoEntry) => {
+    undoStackRef.current.push(entry);
+    if (undoStackRef.current.length > 60) undoStackRef.current.shift();
+    setCanUndo(true);
+  }, []);
 
   const goToPage = useCallback((target: number) => {
     if (!Number.isFinite(target)) return;
@@ -256,6 +270,7 @@ export function PdfAnnotator({
         text,
       });
       setAnnotations((current) => current.map((item) => (item.id === optimistic.id ? saved : item)));
+      pushUndo({ kind: 'created', annotation: saved });
       setStatus('saved');
       return saved;
     } catch (caught) {
@@ -271,6 +286,7 @@ export function PdfAnnotator({
     try {
       const saved = await api.patch<PdfAnnotation>(`/annotations/${annotation.id}`, { text });
       setAnnotations((current) => current.map((item) => (item.id === saved.id ? saved : item)));
+      pushUndo({ kind: 'updated', before: annotation, after: saved });
       setStatus('saved');
       return saved;
     } catch (caught) {
@@ -280,12 +296,14 @@ export function PdfAnnotator({
     }
   };
 
-  const deleteAnnotation = async (annotation: PdfAnnotation) => {
+  const deleteAnnotation = async (annotation: PdfAnnotation, recordUndo = true) => {
     const snapshot = annotations;
     setAnnotations((current) => current.filter((item) => item.id !== annotation.id));
     setStatus('saving');
     try {
       await api.del(`/annotations/${annotation.id}`);
+      if (recordUndo) pushUndo({ kind: 'deleted', annotation });
+      if (noteEditor?.annotation?.id === annotation.id) setNoteEditor(null);
       setStatus('saved');
     } catch (caught) {
       setAnnotations(snapshot);
@@ -293,6 +311,58 @@ export function PdfAnnotator({
       toast(`Annotation was not removed: ${(caught as Error).message}`, 'error');
     }
   };
+
+  const undo = async () => {
+    const entry = undoStackRef.current.pop();
+    if (!entry) return;
+    setCanUndo(undoStackRef.current.length > 0);
+    setStatus('saving');
+    try {
+      if (entry.kind === 'created') {
+        await api.del(`/annotations/${entry.annotation.id}`);
+        setAnnotations((current) => current.filter((item) => item.id !== entry.annotation.id));
+        if (noteEditor?.annotation?.id === entry.annotation.id) setNoteEditor(null);
+      } else if (entry.kind === 'deleted') {
+        const saved = await api.post<PdfAnnotation>(`/attachments/${attachmentId}/annotations`, {
+          page: entry.annotation.page,
+          kind: entry.annotation.kind,
+          color: entry.annotation.color,
+          geometry: entry.annotation.geometry,
+          text: entry.annotation.text,
+        });
+        setAnnotations((current) => [...current, saved]);
+        pushUndo({ kind: 'created', annotation: saved });
+      } else {
+        const saved = await api.patch<PdfAnnotation>(`/annotations/${entry.before.id}`, {
+          text: entry.before.text,
+          color: entry.before.color,
+          geometry: entry.before.geometry,
+        });
+        setAnnotations((current) => current.map((item) => (item.id === saved.id ? saved : item)));
+      }
+      setStatus('saved');
+    } catch (caught) {
+      setStatus(navigator.onLine === false ? 'offline' : 'dirty');
+      toast(`Undo failed: ${(caught as Error).message}`, 'error');
+    }
+  };
+  undoRef.current = undo;
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.key.toLowerCase() !== 'z') return;
+      const target = event.target as HTMLElement | null;
+      const typing =
+        target &&
+        (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable);
+      if (typing) return;
+      if (!undoStackRef.current.length) return;
+      event.preventDefault();
+      void undoRef.current();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const saveNote = async () => {
     if (!noteEditor) return;
@@ -342,13 +412,23 @@ export function PdfAnnotator({
         <span className="pdf-toolbar-divider" />
 
         <div className="row" style={{ gap: 2 }} role="group" aria-label="Annotation tool">
-          <ToolButton label="Select and scroll" active={tool === 'select'} onClick={() => setTool('select')} text="↖" />
+          <ToolButton label="Select, scroll and select text" active={tool === 'select'} onClick={() => setTool('select')} text="↖" />
+          <ToolButton label="Highlight selected text" active={tool === 'text'} onClick={() => setTool('text')} text="T" />
           <ToolButton label="Highlight an area" active={tool === 'highlight'} onClick={() => setTool('highlight')} text="▮" />
           <ToolButton label="Draw with ink" active={tool === 'ink'} onClick={() => setTool('ink')} text="✎" />
           <ToolButton label="Place a note" active={tool === 'note'} onClick={() => setTool('note')} text="✚" />
           <ToolButton label="Erase an annotation" active={tool === 'eraser'} onClick={() => setTool('eraser')} text="⌫" />
+          <button
+            className="pdf-tool"
+            title="Undo last annotation (Ctrl+Z)"
+            aria-label="Undo last annotation"
+            disabled={!canUndo}
+            onClick={() => void undo()}
+          >
+            <Icon name="undo" size={15} />
+          </button>
         </div>
-        {tool === 'highlight' || tool === 'ink' ? (
+        {tool === 'text' || tool === 'highlight' || tool === 'ink' ? (
           <div className="pdf-color-row" aria-label="Annotation colour">
             {PDF_HIGHLIGHT_COLORS.map((value) => (
               <button
@@ -465,6 +545,12 @@ export function PdfAnnotator({
               placeholder="What do you want to remember about this spot?"
               value={noteEditor.text}
               onChange={(event) => setNoteEditor((current) => (current ? { ...current, text: event.target.value } : current))}
+              onKeyDown={(event) => {
+                if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                  event.preventDefault();
+                  if (!noteBusy && noteEditor.text.trim()) void saveNote();
+                }
+              }}
             />
           </div>
         </Modal>
@@ -526,6 +612,7 @@ function PdfPageView({
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const textLayerRef = useRef<HTMLDivElement>(null);
   const drawingRef = useRef<{ x: number; y: number; points: PdfPoint[] } | null>(null);
   const [visible, setVisible] = useState(pageNumber <= 2);
   const [rendered, setRendered] = useState(false);
@@ -550,6 +637,7 @@ function PdfPageView({
     let cancelled = false;
     let page: PDFPageProxy | null = null;
     let renderTask: ReturnType<PDFPageProxy['render']> | null = null;
+    let textLayer: InstanceType<typeof pdfjsLib.TextLayer> | null = null;
 
     pdf
       .getPage(pageNumber)
@@ -572,8 +660,21 @@ function PdfPageView({
           viewport,
           transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0],
         });
-        return renderTask.promise.then(() => {
-          if (!cancelled) setRendered(true);
+        return renderTask.promise.then(async () => {
+          if (cancelled) return;
+          setRendered(true);
+          const container = textLayerRef.current;
+          if (!container) return;
+          container.replaceChildren();
+          container.style.setProperty('--total-scale-factor', String(scale));
+          container.style.setProperty('--scale-round-x', '1px');
+          container.style.setProperty('--scale-round-y', '1px');
+          textLayer = new pdfjsLib.TextLayer({
+            textContentSource: loaded.streamTextContent(),
+            container,
+            viewport,
+          });
+          await textLayer.render();
         });
       })
       .catch(() => undefined);
@@ -581,6 +682,7 @@ function PdfPageView({
     return () => {
       cancelled = true;
       renderTask?.cancel();
+      textLayer?.cancel();
       page?.cleanup();
     };
   }, [pdf, pageNumber, scale, visible]);
@@ -665,17 +767,54 @@ function PdfPageView({
     if (points.length >= 3) void onCreate(pageNumber, 'ink', { points });
   };
 
+  const highlightSelection = () => {
+    if (tool !== 'text') return;
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !selection.toString().trim() || selection.rangeCount === 0) return;
+    const element = wrapperRef.current;
+    if (!element) return;
+    const bounds = element.getBoundingClientRect();
+    const rects = Array.from(selection.getRangeAt(0).getClientRects())
+      .filter(
+        (rect) =>
+          rect.width > 1 &&
+          rect.height > 1 &&
+          rect.right > bounds.left &&
+          rect.left < bounds.right &&
+          rect.bottom > bounds.top &&
+          rect.top < bounds.bottom,
+      )
+      .map((rect) => {
+        const left = Math.max(rect.left, bounds.left);
+        const top = Math.max(rect.top, bounds.top);
+        const right = Math.min(rect.right, bounds.right);
+        const bottom = Math.min(rect.bottom, bounds.bottom);
+        return {
+          x: clamp01((left - bounds.left) / bounds.width),
+          y: clamp01((top - bounds.top) / bounds.height),
+          width: clamp01((right - left) / bounds.width),
+          height: clamp01((bottom - top) / bounds.height),
+        };
+      })
+      .filter((rect) => rect.width > 0.002 && rect.height > 0.002);
+    if (!rects.length) return;
+    selection.removeAllRanges();
+    void onCreate(pageNumber, 'highlight', { rects });
+  };
+
   return (
     <div
-      className={`pdf-page ${rendered ? 'rendered' : ''}`}
+      className={`pdf-page ${rendered ? 'rendered' : ''} tool-${tool}`}
       style={{ width, height }}
       ref={(element) => {
         wrapperRef.current = element;
         registerPage(pageNumber, element);
       }}
       data-page={pageNumber}
+      onMouseUp={highlightSelection}
     >
       <canvas ref={canvasRef} className="pdf-page-canvas" />
+      <div className="pdf-text-layer" ref={textLayerRef} />
       {!rendered ? <span className="pdf-page-skeleton">Page {pageNumber}</span> : null}
 
       <svg className="pdf-annotation-layer" width={width} height={height} aria-hidden={!annotations.length}>
@@ -699,25 +838,30 @@ function PdfPageView({
               />
             );
           }
-          if (annotation.kind === 'highlight' && annotation.geometry.rect) {
-            const rect = annotation.geometry.rect;
+          if (annotation.kind === 'highlight') {
+            const rects = annotation.geometry.rects ?? (annotation.geometry.rect ? [annotation.geometry.rect] : []);
+            if (!rects.length) return null;
             return (
-              <rect
-                key={annotation.id}
-                x={rect.x * width}
-                y={rect.y * height}
-                width={rect.width * width}
-                height={rect.height * height}
-                rx={3}
-                fill={annotation.color}
-                fillOpacity={0.32}
-                style={{ pointerEvents: tool === 'eraser' ? 'auto' : 'none', cursor: tool === 'eraser' ? 'crosshair' : 'default' }}
-                onClick={(event) => {
-                  if (tool !== 'eraser') return;
-                  event.stopPropagation();
-                  onDelete(annotation);
-                }}
-              />
+              <g key={annotation.id}>
+                {rects.map((rect, index) => (
+                  <rect
+                    key={`${annotation.id}_${index}`}
+                    x={rect.x * width}
+                    y={rect.y * height}
+                    width={rect.width * width}
+                    height={rect.height * height}
+                    rx={3}
+                    fill={annotation.color}
+                    fillOpacity={0.32}
+                    style={{ pointerEvents: tool === 'eraser' ? 'auto' : 'none', cursor: tool === 'eraser' ? 'crosshair' : 'default' }}
+                    onClick={(event) => {
+                      if (tool !== 'eraser') return;
+                      event.stopPropagation();
+                      onDelete(annotation);
+                    }}
+                  />
+                ))}
+              </g>
             );
           }
           return null;

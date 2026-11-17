@@ -65,6 +65,12 @@ function assertAnnotationGeometry(kind: PdfAnnotation['kind'], geometry: PdfAnno
     }
     return;
   }
+  if (kind === 'highlight') {
+    if (!geometry.rect && !geometry.rects?.length) {
+      throw new AppError('bad_request', 'Highlights need at least one rectangle.');
+    }
+    return;
+  }
   if (!geometry.rect) {
     throw new AppError('bad_request', 'This annotation needs a rectangle.');
   }

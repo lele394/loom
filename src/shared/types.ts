@@ -236,6 +236,7 @@ export interface PdfRect {
 
 export interface PdfAnnotationGeometry {
   rect?: PdfRect;
+  rects?: PdfRect[];
   points?: PdfPoint[];
 }
 

@@ -1134,16 +1134,38 @@ mark { background: var(--warning-soft); color: var(--text); padding: 0 2px; bord
   user-select: none;
 }
 .dock-grip:active { cursor: grabbing; }
-.dock-collapse {
-  display: grid;
-  place-items: center;
-  padding: 2px;
+.dock-toggle-zone {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 2px;
   border: 0;
+  border-radius: 6px;
   background: none;
-  color: var(--text-muted);
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
 }
+.dock-toggle-zone:hover { background: var(--surface-3); }
 .dock-title { font-size: 12.5px; }
+.dock-splitter {
+  flex: 0 0 6px;
+  height: 6px;
+  border-radius: 4px;
+  cursor: row-resize;
+  position: relative;
+}
+.dock-splitter::after {
+  content: '';
+  position: absolute;
+  inset: 2px 20% auto;
+  height: 1px;
+  background: var(--border);
+}
+.dock-splitter:hover, .dock-splitter:active { background: var(--accent-soft); }
 .dock-panel-body { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
 .dock-panel[data-panel='notes'] .dock-panel-body { overflow: hidden; }
 
@@ -1278,6 +1300,7 @@ mark { background: var(--warning-soft); color: var(--text); padding: 0 2px; bord
 }
 .pdf-tool:hover { background: var(--surface-2); color: var(--text); }
 .pdf-tool.active { background: var(--accent-soft); color: var(--accent); border-color: var(--border-strong); }
+.pdf-tool:disabled { opacity: 0.4; cursor: default; }
 .pdf-color-row { display: flex; align-items: center; gap: 3px; }
 .pdf-color {
   width: 16px;
@@ -1310,13 +1333,48 @@ mark { background: var(--warning-soft); color: var(--text); padding: 0 2px; bord
   font-size: 12px;
 }
 .pdf-page.rendered .pdf-page-skeleton { display: none; }
-.pdf-annotation-layer { position: absolute; inset: 0; overflow: visible; }
-.pdf-draw-layer { position: absolute; inset: 0; touch-action: none; }
+.pdf-text-layer {
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor, 1) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  line-height: 1;
+  text-align: initial;
+  text-size-adjust: none;
+  transform-origin: 0 0;
+  z-index: 1;
+}
+.pdf-text-layer :is(span, br) {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0 0;
+  user-select: text;
+}
+.pdf-text-layer > :not(.markedContent),
+.pdf-text-layer .markedContent span:not(.markedContent) {
+  z-index: 1;
+  --font-height: 0;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+.pdf-text-layer .markedContent { display: contents; }
+.pdf-text-layer span[role='img'] { user-select: none; cursor: default; }
+.pdf-page.tool-select .pdf-text-layer :is(span, br),
+.pdf-page.tool-text .pdf-text-layer :is(span, br) { cursor: text; }
+.pdf-text-layer ::selection { background: color-mix(in srgb, var(--accent) 38%, transparent); }
+.pdf-annotation-layer { position: absolute; inset: 0; overflow: visible; z-index: 2; pointer-events: none; }
+.pdf-draw-layer { position: absolute; inset: 0; touch-action: none; z-index: 4; }
 .pdf-draw-layer.tool-highlight, .pdf-draw-layer.tool-ink { cursor: crosshair; }
 .pdf-draw-layer.tool-note { cursor: copy; }
 .pdf-note-marker {
   position: absolute;
-  z-index: 2;
+  z-index: 3;
   width: 22px;
   height: 22px;
   border-radius: 50% 50% 50% 4px;

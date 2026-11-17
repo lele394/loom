@@ -310,6 +310,7 @@ const pdfRectSchema = z.object({
 });
 const pdfGeometrySchema = z.object({
   rect: pdfRectSchema.optional(),
+  rects: z.array(pdfRectSchema).max(200).optional(),
   points: z.array(pdfPointSchema).max(4000).optional(),
 });
 

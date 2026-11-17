@@ -129,22 +129,33 @@ export function Modal({
   slim?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') onCloseRef.current();
     };
     document.addEventListener('keydown', onKey);
     const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const focusable = ref.current?.querySelector<HTMLElement>(
-      'input, textarea, select, button:not([disabled])',
-    );
-    setTimeout(() => focusable?.focus(), 10);
+    const timer = window.setTimeout(() => {
+      // Focus the first useful field once, on mount. Never re-focus on later
+      // renders: that steals the caret while the user is typing.
+      if (ref.current?.contains(document.activeElement)) return;
+      const bodyField = ref.current?.querySelector<HTMLElement>(
+        '.modal-body input:not([disabled]), .modal-body textarea:not([disabled]), .modal-body select:not([disabled]), .modal-body button:not([disabled])',
+      );
+      const fallback = ref.current?.querySelector<HTMLElement>(
+        'input, textarea, select, button:not([disabled])',
+      );
+      (bodyField ?? fallback)?.focus();
+    }, 10);
     return () => {
+      window.clearTimeout(timer);
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = previous;
     };
-  }, [onClose]);
+  }, []);
   return (
     <div className="overlay" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <div

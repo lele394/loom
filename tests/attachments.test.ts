@@ -263,6 +263,19 @@ describe('attachments and literature', () => {
     });
     expect(ink.status).toBe(201);
 
+    const textHighlight = await harness.request('POST', `/attachments/${attachment.id}/annotations`, {
+      page: 2,
+      kind: 'highlight',
+      geometry: {
+        rects: [
+          { x: 0.1, y: 0.2, width: 0.4, height: 0.03 },
+          { x: 0.1, y: 0.24, width: 0.25, height: 0.03 },
+        ],
+      },
+    });
+    expect(textHighlight.status).toBe(201);
+    expect(textHighlight.body.geometry.rects).toHaveLength(2);
+
     const invalid = await harness.request('POST', `/attachments/${attachment.id}/annotations`, {
       page: 1,
       kind: 'highlight',
@@ -271,7 +284,7 @@ describe('attachments and literature', () => {
     expect(invalid.status).toBe(400);
 
     const list = await harness.request('GET', `/attachments/${attachment.id}/annotations`);
-    expect(list.body.annotations).toHaveLength(2);
+    expect(list.body.annotations).toHaveLength(3);
     expect(list.body.annotations[0].page).toBe(1);
 
     const patched = await harness.request('PATCH', `/annotations/${highlight.body.id}`, {
@@ -283,7 +296,7 @@ describe('attachments and literature', () => {
 
     await harness.request('DELETE', `/annotations/${ink.body.id}`);
     const remaining = await harness.request('GET', `/attachments/${attachment.id}/annotations`);
-    expect(remaining.body.annotations).toHaveLength(1);
+    expect(remaining.body.annotations).toHaveLength(2);
     expect(remaining.body.annotations[0].id).toBe(highlight.body.id);
   });
 

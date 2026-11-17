@@ -35,6 +35,7 @@ interface PanelLayout {
 }
 
 type LayoutState = Record<PanelId, PanelLayout>;
+type PanelWeights = Record<PanelId, number>;
 
 const PANELS: Record<PanelId, { title: string; icon: IconName }> = {
   notes: { title: 'Personal notes', icon: 'note' },
@@ -51,10 +52,10 @@ const DEFAULT_LAYOUT: LayoutState = {
   chat: { open: true, dock: 'right', collapsed: true },
 };
 
-const LEFT_MIN = 250;
-const LEFT_MAX = 560;
-const RIGHT_MIN = 270;
-const RIGHT_MAX = 640;
+const LEFT_MIN = 220;
+const LEFT_MAX = 720;
+const RIGHT_MIN = 240;
+const RIGHT_MAX = 900;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -73,6 +74,22 @@ function readLayout(referenceId: string): LayoutState {
     };
   } catch {
     return DEFAULT_LAYOUT;
+  }
+}
+
+function readWeights(referenceId: string): PanelWeights {
+  try {
+    const raw = localStorage.getItem(`loom-read-weights:${referenceId}`);
+    if (!raw) return { notes: 1, bookmarks: 1, summary: 1, chat: 1 };
+    const parsed = JSON.parse(raw) as Partial<PanelWeights>;
+    return {
+      notes: parsed.notes ?? 1,
+      bookmarks: parsed.bookmarks ?? 1,
+      summary: parsed.summary ?? 1,
+      chat: parsed.chat ?? 1,
+    };
+  } catch {
+    return { notes: 1, bookmarks: 1, summary: 1, chat: 1 };
   }
 }
 
@@ -104,6 +121,7 @@ export function ReadWindow({ referenceId }: { referenceId: string }) {
   const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
   const [layout, setLayout] = useState<LayoutState>(() => readLayout(referenceId));
   const [widths, setWidths] = useState(() => readWidths(referenceId));
+  const [weights, setWeights] = useState<PanelWeights>(() => readWeights(referenceId));
   const [currentPage, setCurrentPage] = useState(1);
   const [dropTarget, setDropTarget] = useState<DockSide | null>(null);
   const viewerRef = useRef<PdfAnnotatorHandle | null>(null);
@@ -123,6 +141,10 @@ export function ReadWindow({ referenceId }: { referenceId: string }) {
   useEffect(() => {
     localStorage.setItem(`loom-read-widths:${referenceId}`, JSON.stringify(widths));
   }, [widths, referenceId]);
+
+  useEffect(() => {
+    localStorage.setItem(`loom-read-weights:${referenceId}`, JSON.stringify(weights));
+  }, [weights, referenceId]);
 
   useEffect(() => {
     notesRef.current = notes;
@@ -239,16 +261,32 @@ export function ReadWindow({ referenceId }: { referenceId: string }) {
   const rightPanels = PANEL_ORDER.filter((id) => layout[id].open && layout[id].dock === 'right');
 
   const updatePanel = (id: PanelId, patch: Partial<PanelLayout>) => {
-    setLayout((current) => ({ ...current, [id]: { ...current[id], ...patch } }));
+    const current = layout[id];
+    const next = { ...current, ...patch };
+    const wasVisible = current.open && !current.collapsed;
+    const isVisible = next.open && !next.collapsed;
+    const dockChanged = current.dock !== next.dock;
+    if (isVisible && (!wasVisible || dockChanged)) {
+      const siblings = PANEL_ORDER.filter(
+        (candidate) =>
+          candidate !== id &&
+          layout[candidate].open &&
+          !layout[candidate].collapsed &&
+          layout[candidate].dock === next.dock,
+      );
+      const average = siblings.length
+        ? siblings.reduce((sum, candidate) => sum + (weights[candidate] ?? 1), 0) / siblings.length
+        : 1;
+      setWeights((values) => ({ ...values, [id]: average }));
+    }
+    setLayout((values) => ({ ...values, [id]: { ...values[id], ...patch } }));
   };
 
   const togglePanel = (id: PanelId) => {
-    setLayout((current) => {
-      const panel = current[id];
-      if (!panel.open) return { ...current, [id]: { ...panel, open: true, collapsed: false } };
-      if (panel.collapsed) return { ...current, [id]: { ...panel, collapsed: false } };
-      return { ...current, [id]: { ...panel, open: false } };
-    });
+    const panel = layout[id];
+    if (!panel.open) updatePanel(id, { open: true, collapsed: false });
+    else if (panel.collapsed) updatePanel(id, { collapsed: false });
+    else updatePanel(id, { open: false });
   };
 
   const movePanel = (id: PanelId, dock: DockSide) => {
@@ -258,6 +296,7 @@ export function ReadWindow({ referenceId }: { referenceId: string }) {
   const resetLayout = () => {
     setLayout(DEFAULT_LAYOUT);
     setWidths({ left: 320, right: 360 });
+    setWeights({ notes: 1, bookmarks: 1, summary: 1, chat: 1 });
   };
 
   const beginResize = (side: DockSide, event: ReactPointerEvent<HTMLDivElement>) => {
@@ -288,8 +327,45 @@ export function ReadWindow({ referenceId }: { referenceId: string }) {
     window.addEventListener('pointerup', stop);
   };
 
+  const beginPanelResize = (
+    first: PanelId,
+    second: PanelId,
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    event.preventDefault();
+    const dock = event.currentTarget.parentElement;
+    if (!dock) return;
+    const measured: Partial<PanelWeights> = {};
+    for (const element of dock.querySelectorAll<HTMLElement>('.dock-panel.expanded')) {
+      const id = element.dataset.panel as PanelId | undefined;
+      if (id) measured[id] = Math.round(element.getBoundingClientRect().height);
+    }
+    setWeights((current) => ({ ...current, ...measured }));
+    const startY = event.clientY;
+    const startFirst = measured[first] ?? 120;
+    const startSecond = measured[second] ?? 120;
+    const previousCursor = document.body.style.cursor;
+    const previousSelect = document.body.style.userSelect;
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+    const move = (moveEvent: PointerEvent) => {
+      const delta = moveEvent.clientY - startY;
+      const nextFirst = Math.max(88, startFirst + delta);
+      const nextSecond = Math.max(88, startSecond - delta);
+      setWeights((current) => ({ ...current, [first]: nextFirst, [second]: nextSecond }));
+    };
+    const stop = () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousSelect;
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', stop);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', stop);
+  };
+
   const insertBookmark = (bookmark: ReferenceBookmark) => {
-    setLayout((current) => ({ ...current, notes: { ...current.notes, open: true, collapsed: false } }));
+    updatePanel('notes', { open: true, collapsed: false });
     const snippet = `\n> [[p.${bookmark.page}]]${bookmark.note ? ` — ${bookmark.note}` : ''}\n`;
     setNotes((current) => `${current}${current.endsWith('\n') || !current ? '' : '\n'}${snippet}`);
   };
@@ -351,6 +427,7 @@ export function ReadWindow({ referenceId }: { referenceId: string }) {
         title={definition.title}
         icon={definition.icon}
         collapsed={panel.collapsed}
+        weight={weights[id] ?? 1}
         actions={actions}
         onToggle={() => updatePanel(id, { collapsed: !panel.collapsed })}
         onClose={() => updatePanel(id, { open: false })}
@@ -389,6 +466,30 @@ export function ReadWindow({ referenceId }: { referenceId: string }) {
         ) : null}
       </DockPanel>
     );
+  };
+
+  const renderDockPanels = (ids: PanelId[]) => {
+    const nodes: ReactNode[] = [];
+    let previousExpanded: PanelId | null = null;
+    for (const id of ids) {
+      const expanded = !layout[id].collapsed;
+      if (expanded && previousExpanded) {
+        const first = previousExpanded;
+        nodes.push(
+          <div
+            key={`split-${first}-${id}`}
+            className="dock-splitter"
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label={`Resize ${PANELS[first].title} and ${PANELS[id].title}`}
+            onPointerDown={(event) => beginPanelResize(first, id, event)}
+          />,
+        );
+      }
+      nodes.push(renderPanel(id));
+      if (expanded) previousExpanded = id;
+    }
+    return nodes;
   };
 
   return (
@@ -476,7 +577,7 @@ export function ReadWindow({ referenceId }: { referenceId: string }) {
                 if (id in layout) movePanel(id, 'left');
               }}
             >
-              {leftPanels.map(renderPanel)}
+              {renderDockPanels(leftPanels)}
             </aside>
             <div className="read-splitter" role="separator" aria-orientation="vertical" onPointerDown={(event) => beginResize('left', event)} />
           </>
@@ -521,7 +622,7 @@ export function ReadWindow({ referenceId }: { referenceId: string }) {
                 if (id in layout) movePanel(id, 'right');
               }}
             >
-              {rightPanels.map(renderPanel)}
+              {renderDockPanels(rightPanels)}
             </aside>
           </>
         ) : null}
@@ -535,6 +636,7 @@ function DockPanel({
   title,
   icon,
   collapsed,
+  weight,
   actions,
   onToggle,
   onClose,
@@ -546,6 +648,7 @@ function DockPanel({
   title: string;
   icon: IconName;
   collapsed: boolean;
+  weight: number;
   actions?: ReactNode;
   onToggle: () => void;
   onClose: () => void;
@@ -554,7 +657,11 @@ function DockPanel({
   children: ReactNode;
 }) {
   return (
-    <section className={`dock-panel ${collapsed ? 'collapsed' : 'expanded'}`} data-panel={id}>
+    <section
+      className={`dock-panel ${collapsed ? 'collapsed' : 'expanded'}`}
+      data-panel={id}
+      style={collapsed ? undefined : { flexGrow: weight, flexShrink: 1, flexBasis: 0 }}
+    >
       <header className="dock-panel-head">
         <span
           className="dock-grip"
@@ -565,13 +672,20 @@ function DockPanel({
         >
           ⋮⋮
         </span>
-        <button className="dock-collapse" onClick={onToggle} aria-label={collapsed ? `Expand ${title}` : `Collapse ${title}`}>
+        <button
+          type="button"
+          className="dock-toggle-zone"
+          onClick={onToggle}
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? `Expand ${title}` : `Collapse ${title}`}
+          title={collapsed ? `Expand ${title}` : `Collapse ${title}`}
+        >
           <Icon name={collapsed ? 'chevron-right' : 'chevron-down'} size={14} />
+          <Icon name={icon} size={14} />
+          <strong className="dock-title truncate">{title}</strong>
+          {actions}
+          <span className="grow" />
         </button>
-        <Icon name={icon} size={14} />
-        <strong className="dock-title truncate">{title}</strong>
-        <span className="grow" />
-        {actions}
         <button className="icon-btn sm" title="Move to the other side" aria-label="Move panel to the other side" onClick={onMove}>
           <Icon name="panel" size={13} />
         </button>

@@ -148,7 +148,8 @@ Executable checklist for Loom v1. Checked items are implemented and verified (20
   - dedicated read tab with a dockable panel layout, resizable left/right docks and a panel-spawning topbar
   - Markdown personal-notes editor with 30-second autosave and saved/unsaved/no-connection indicator
   - bookmarks, AI summary and paper-bound AI chat as collapsible, movable and closable dock panels
-  - built-in pdf.js reader with highlight, ink and sticky-note annotations saved through the API (migration 005)
+  - built-in pdf.js reader with selectable text, text/area highlights, ink and sticky-note annotations, Ctrl+Z undo and API persistence (migration 005)
+  - per-panel vertical resizing plus whole-title collapse toggles alongside the red drag/move/close affordances
 - [x] **P3.9 Durable processing queues** (extension, 2026-11-16)
   - bulk metadata re-extraction moved to `reference.reextract` jobs; migration 004 adds `jobs.dismissed_at`
   - literature queue hydrates from `GET /references/extraction-jobs` and polls until idle, so refresh or a closed tab loses nothing
