@@ -5,6 +5,8 @@ import {
   calendarItemCreateSchema,
   calendarItemUpdateSchema,
   calendarQuerySchema,
+  calendarSubscriptionCreateSchema,
+  calendarSubscriptionQuerySchema,
   calendarUpcomingQuerySchema,
 } from '../../../shared/schemas';
 
@@ -28,6 +30,44 @@ export async function calendarRoutes(app: FastifyInstance, ctx: Ctx): Promise<vo
         limit: query.limit,
       }),
     });
+  });
+
+  app.get('/calendar/subscriptions', async (request, reply) => {
+    const query = parse(calendarSubscriptionQuerySchema, request.query);
+    return reply.send({
+      subscriptions: ctx.services.calendar.listSubscriptions({
+        ...(query.projectId ? { projectId: query.projectId } : {}),
+      }),
+    });
+  });
+
+  app.post(
+    '/calendar/subscriptions',
+    { config: { rateLimit: { max: 30, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      if (!request.user) throw new Error('unauthenticated');
+      const input = parse(calendarSubscriptionCreateSchema, request.body);
+      return reply.status(201).send(
+        await ctx.services.calendar.addSubscription(input, request.user.id),
+      );
+    },
+  );
+
+  app.post(
+    '/calendar/subscriptions/:id/sync',
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      if (!request.user) throw new Error('unauthenticated');
+      const { id } = request.params as { id: string };
+      return reply.send(await ctx.services.calendar.syncSubscription(id, request.user.id));
+    },
+  );
+
+  app.delete('/calendar/subscriptions/:id', async (request, reply) => {
+    if (!request.user) throw new Error('unauthenticated');
+    const { id } = request.params as { id: string };
+    ctx.services.calendar.removeSubscription(id, request.user.id);
+    return reply.send({ ok: true });
   });
 
   app.post('/calendar', async (request, reply) => {

@@ -111,6 +111,16 @@ export const calendarUpcomingQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(8),
 });
 
+export const calendarSubscriptionCreateSchema = z.object({
+  projectId: id,
+  url: z.string().trim().url().max(2000),
+  name: z.string().trim().max(160).optional().default(''),
+});
+
+export const calendarSubscriptionQuerySchema = z.object({
+  projectId: id.optional(),
+});
+
 export const columnCreateSchema = z.object({
   name: z.string().trim().min(1).max(60),
   isDone: z.boolean().optional().default(false),

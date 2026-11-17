@@ -72,11 +72,18 @@ async function assertPublicHost(hostname: string): Promise<void> {
 
 export async function safeFetch(
   rawUrl: string,
-  opts: { maxBytes?: number; timeoutMs?: number; maxRedirects?: number } = {},
+  opts: {
+    maxBytes?: number;
+    timeoutMs?: number;
+    maxRedirects?: number;
+    accept?: string;
+    allowedContentTypes?: string[];
+  } = {},
 ): Promise<SafeFetchResult> {
   const maxBytes = opts.maxBytes ?? 5 * 1024 * 1024;
   const maxRedirects = opts.maxRedirects ?? 3;
   const timeoutMs = opts.timeoutMs ?? 10_000;
+  const allowedContentTypes = opts.allowedContentTypes ?? ['text/html', 'application/pdf'];
   let current: URL;
   try {
     current = new URL(rawUrl);
@@ -97,7 +104,10 @@ export async function safeFetch(
       response = await fetch(current, {
         redirect: 'manual',
         signal: controller.signal,
-        headers: { 'user-agent': 'Loom/0.1 (+research notebook)', accept: 'text/html,application/pdf;q=0.8' },
+        headers: {
+          'user-agent': 'Loom/0.1 (+research notebook)',
+          accept: opts.accept ?? 'text/html,application/pdf;q=0.8',
+        },
       });
     } catch (error) {
       clearTimeout(timer);
@@ -121,9 +131,16 @@ export async function safeFetch(
     }
 
     const contentType = (response.headers.get('content-type') ?? '').toLowerCase();
-    if (!contentType.includes('text/html') && !contentType.includes('application/pdf')) {
+    if (!allowedContentTypes.some((allowed) => contentType.includes(allowed))) {
       clearTimeout(timer);
-      throw new AppError('unsupported_file', 'Only HTML pages and PDFs can be captured from a URL.');
+      throw new AppError(
+        'unsupported_file',
+        allowedContentTypes.length === 2 &&
+          allowedContentTypes.includes('text/html') &&
+          allowedContentTypes.includes('application/pdf')
+          ? 'Only HTML pages and PDFs can be captured from a URL.'
+          : `Unsupported content type "${contentType || 'unknown'}".`,
+      );
     }
 
     if (contentType.includes('application/pdf')) {
@@ -134,8 +151,8 @@ export async function safeFetch(
 
     const bytes = await readCapped(response, maxBytes, controller);
     clearTimeout(timer);
-    const html = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
-    return { finalUrl: current.toString(), contentType: 'text/html', body: html };
+    const text = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+    return { finalUrl: current.toString(), contentType, body: text };
   }
 
   throw new AppError('bad_request', 'Too many redirects.');

@@ -117,6 +117,21 @@ export interface CalendarItem {
   description: string;
   startsAt: string;
   endsAt: string | null;
+  subscriptionId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CalendarSubscription {
+  id: string;
+  projectId: string;
+  projectName: string;
+  projectColor: Palette;
+  name: string;
+  url: string;
+  itemCount: number;
+  lastSyncedAt: string | null;
+  lastSyncError: string | null;
   createdAt: string;
   updatedAt: string;
 }

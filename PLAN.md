@@ -175,6 +175,12 @@ Executable checklist for Loom v1. Checked items are implemented and verified (20
   - global Calendar destination aggregates every project with a chronological Upcoming bar
   - month grid supports multi-day events, click-to-create, edit/delete, archived-project read-only state
   - calendar activity recorded in the project timeline; export/backup coverage and API tests
+- [x] **P3.13 External calendar sync** (extension, 2026-11-17)
+  - per-project `.ics` subscriptions with SSRF-safe fetching and 5 MB feed cap
+  - iCalendar parsing with timezones, recurrence expansion, cancelled-event filtering and type mapping
+  - deduplicated external items; removed source events clean up within the sync window
+  - manual Resync plus automatic refresh on calendar open when older than 30 minutes
+  - green success / yellow syncing / red failed status dots, migration 009, parser and sync tests
 - [x] **P3.5 Routes, UI hooks, tests**
   - upload limits/sniff rejection, dedup, DOI not overwritten, SSRF cases, BibTeX round-trip, range requests
 

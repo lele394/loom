@@ -1,8 +1,8 @@
-import { useMemo, useState, type CSSProperties } from 'react';
-import type { CalendarItem, Project } from '../../../shared/types';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import type { CalendarItem, CalendarSubscription, Project } from '../../../shared/types';
 import { CALENDAR_ITEM_TYPES, type CalendarItemType, type Palette } from '../../../shared/constants';
 import { api } from '../../shared/api';
-import { useAsync, formatDate, timeOf, todayIso } from '../../shared/hooks';
+import { useAsync, formatDate, relativeTime, timeOf, todayIso } from '../../shared/hooks';
 import { Icon } from '../../shared/icons';
 import { PALETTE_META } from '../../shared/theme';
 import { Field, Loading, Modal, useConfirm, useToast } from '../../shared/ui';
@@ -24,6 +24,12 @@ const TYPE_COLORS: Record<CalendarItemType, string> = {
 };
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const SYNC_INTERVAL_MS = 30 * 60 * 1000;
+
+function subscriptionDue(subscription: CalendarSubscription): boolean {
+  const last = subscription.lastSyncError ? subscription.updatedAt : subscription.lastSyncedAt ?? subscription.updatedAt;
+  return Date.now() - new Date(last).getTime() > SYNC_INTERVAL_MS;
+}
 
 function pad(value: number): string {
   return String(value).padStart(2, '0');
@@ -114,11 +120,85 @@ export function CalendarView({ projectId, readOnly = false }: { projectId?: stri
         .then((data) => data.items),
     [projectId],
   );
+  const subscriptions = useAsync(
+    () =>
+      api
+        .get<{ subscriptions: CalendarSubscription[] }>(
+          `/calendar/subscriptions${projectId ? `?projectId=${projectId}` : ''}`,
+        )
+        .then((data) => data.subscriptions),
+    [projectId],
+  );
+  const [subscriptionsOpen, setSubscriptionsOpen] = useState(false);
+  const [feedUrl, setFeedUrl] = useState('');
+  const [feedName, setFeedName] = useState('');
+  const [feedProjectId, setFeedProjectId] = useState(projectId ?? '');
+  const [addingFeed, setAddingFeed] = useState(false);
+  const [syncingIds, setSyncingIds] = useState<Set<string>>(() => new Set());
+  const autoSyncRef = useRef(false);
 
   const reload = () => {
     items.reload();
     upcoming.reload();
+    subscriptions.reload();
   };
+
+  useEffect(() => {
+    autoSyncRef.current = false;
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!projectId && !feedProjectId && projects.data?.length) {
+      setFeedProjectId(projects.data[0]!.id);
+    }
+  }, [feedProjectId, projectId, projects.data]);
+
+  const syncSubscription = async (subscription: CalendarSubscription, silent = false) => {
+    setSyncingIds((current) => new Set(current).add(subscription.id));
+    try {
+      const result = await api.post<{
+        created: number;
+        updated: number;
+        removed: number;
+        imported: number;
+        truncated: boolean;
+      }>(`/calendar/subscriptions/${subscription.id}/sync`, {});
+      if (!silent) {
+        toast(
+          `Synced ${result.imported} event${result.imported === 1 ? '' : 's'} (+${result.created} ~${result.updated} -${result.removed})`,
+          'success',
+        );
+        if (result.truncated) {
+          toast('The feed was very large; recurring events were capped for safety.', 'info');
+        }
+      }
+      items.reload();
+      upcoming.reload();
+      subscriptions.reload();
+    } catch (error) {
+      if (!silent) toast((error as Error).message, 'error');
+      subscriptions.reload();
+    } finally {
+      setSyncingIds((current) => {
+        const next = new Set(current);
+        next.delete(subscription.id);
+        return next;
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (!subscriptions.data || autoSyncRef.current) return;
+    autoSyncRef.current = true;
+    const due = subscriptions.data.filter(subscriptionDue);
+    if (!due.length) return;
+    void (async () => {
+      for (const subscription of due) {
+        await syncSubscription(subscription, true);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subscriptions.data]);
 
   const itemsByDay = useMemo(() => {
     const map = new Map<string, CalendarItem[]>();
@@ -234,6 +314,63 @@ export function CalendarView({ projectId, readOnly = false }: { projectId?: stri
     }
   };
 
+  const addFeed = async () => {
+    const targetProject = projectId ?? feedProjectId;
+    if (!targetProject) {
+      toast('Choose a project for this calendar.', 'error');
+      return;
+    }
+    setAddingFeed(true);
+    try {
+      const subscription = await api.post<CalendarSubscription>('/calendar/subscriptions', {
+        projectId: targetProject,
+        url: feedUrl,
+        name: feedName,
+      });
+      items.reload();
+      upcoming.reload();
+      subscriptions.reload();
+      setFeedUrl('');
+      setFeedName('');
+      if (subscription.lastSyncError) {
+        toast(`Calendar linked, but the first sync failed: ${subscription.lastSyncError}`, 'error');
+      } else {
+        toast('Calendar linked and synced', 'success');
+      }
+    } catch (error) {
+      toast((error as Error).message, 'error');
+    } finally {
+      setAddingFeed(false);
+    }
+  };
+
+  const removeFeed = async (subscription: CalendarSubscription) => {
+    const ok = await confirm({
+      title: 'Remove external calendar?',
+      message: `This removes ${subscription.name} and its imported events from the calendar.`,
+      confirmLabel: 'Remove',
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await api.del(`/calendar/subscriptions/${subscription.id}`);
+      items.reload();
+      upcoming.reload();
+      subscriptions.reload();
+      toast('External calendar removed', 'success');
+    } catch (error) {
+      toast((error as Error).message, 'error');
+    }
+  };
+
+  const subscriptionList = subscriptions.data ?? [];
+  const aggregateSync = syncingIds.size
+    ? 'syncing'
+    : subscriptionList.some((subscription) => subscription.lastSyncError)
+      ? 'failed'
+      : subscriptionList.some((subscription) => subscription.lastSyncedAt)
+        ? 'success'
+        : 'idle';
   const today = todayIso();
   const monthLabel = month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
   const shiftMonth = (delta: number) => {
@@ -267,6 +404,12 @@ export function CalendarView({ projectId, readOnly = false }: { projectId?: stri
             </span>
           ))}
         </div>
+        <button className="btn" onClick={() => setSubscriptionsOpen(true)}>
+          <Icon name="refresh" size={14} /> Sync calendar
+          {aggregateSync !== 'idle' ? (
+            <span className={`sync-dot ${aggregateSync}`} aria-label={`Calendar sync ${aggregateSync}`} />
+          ) : null}
+        </button>
         <button className="btn primary" disabled={readOnly} onClick={() => openNew()}>
           <Icon name="plus" size={14} /> New item
         </button>
@@ -351,6 +494,130 @@ export function CalendarView({ projectId, readOnly = false }: { projectId?: stri
           );
         })}
       </div>
+
+      {subscriptionsOpen ? (
+        <Modal
+          title="Sync calendar"
+          description="Import a standard iCalendar (.ics) feed. Recurring events are expanded; only event metadata is imported."
+          onClose={() => setSubscriptionsOpen(false)}
+          wide
+        >
+          <div className="stack">
+            <div className="card tight stack sm">
+              <strong className="small">Add calendar link</strong>
+              <Field label="Calendar URL">
+                <input
+                  className="input"
+                  value={feedUrl}
+                  onChange={(event) => setFeedUrl(event.target.value)}
+                  placeholder="https://…/calendar.ics"
+                  autoFocus
+                />
+              </Field>
+              <div className="grid-2">
+                <Field label="Name (optional)">
+                  <input
+                    className="input"
+                    value={feedName}
+                    onChange={(event) => setFeedName(event.target.value)}
+                    placeholder="e.g. University schedule"
+                  />
+                </Field>
+                {!projectId ? (
+                  <Field label="Project">
+                    <select
+                      className="select"
+                      value={feedProjectId}
+                      onChange={(event) => setFeedProjectId(event.target.value)}
+                    >
+                      {(projects.data ?? []).map((project) => (
+                        <option key={project.id} value={project.id}>{project.name}</option>
+                      ))}
+                    </select>
+                  </Field>
+                ) : null}
+              </div>
+              <div className="row between">
+                <span className="tiny faint">
+                  Works with TimeEdit, Google Calendar, Outlook and other standard .ics feeds.
+                </span>
+                <button
+                  className="btn primary sm"
+                  disabled={addingFeed || !feedUrl.trim() || (!projectId && !feedProjectId)}
+                  onClick={() => void addFeed()}
+                >
+                  {addingFeed ? 'Syncing…' : 'Add & sync'}
+                </button>
+              </div>
+            </div>
+
+            <div className="stack sm">
+              <div className="row between">
+                <strong className="small">Linked calendars</strong>
+                {syncingIds.size ? <span className="tiny faint">Syncing {syncingIds.size}…</span> : null}
+              </div>
+              {subscriptions.loading ? <Loading rows={2} /> : null}
+              {!subscriptions.loading && !subscriptionList.length ? (
+                <span className="tiny faint">No external calendar linked yet.</span>
+              ) : null}
+              {subscriptionList.map((subscription) => {
+                const syncState = syncingIds.has(subscription.id)
+                  ? 'syncing'
+                  : subscription.lastSyncError
+                    ? 'failed'
+                    : subscription.lastSyncedAt
+                      ? 'success'
+                      : 'idle';
+                return (
+                  <div className="sync-feed-row" key={subscription.id}>
+                    <span className={`sync-dot ${syncState}`} title={`Last sync: ${syncState}`} />
+                    <div className="grow" style={{ minWidth: 0 }}>
+                      <div className="row" style={{ gap: 6 }}>
+                        <strong className="small truncate">{subscription.name}</strong>
+                        {!projectId ? <span className="badge">{subscription.projectName}</span> : null}
+                        <span className="tiny faint">{subscription.itemCount} events</span>
+                      </div>
+                      <div className="tiny faint truncate" title={subscription.url}>{subscription.url}</div>
+                      <div className="tiny faint">
+                        {subscription.lastSyncError
+                          ? `Failed ${relativeTime(subscription.updatedAt)}`
+                          : subscription.lastSyncedAt
+                            ? `Synced ${relativeTime(subscription.lastSyncedAt)}`
+                            : 'Not synced yet'}
+                      </div>
+                      {subscription.lastSyncError ? (
+                        <div className="tiny" style={{ color: 'var(--danger)' }}>{subscription.lastSyncError}</div>
+                      ) : null}
+                    </div>
+                    <button
+                      className="btn sm"
+                      disabled={syncingIds.has(subscription.id) || readOnly}
+                      onClick={() => void syncSubscription(subscription)}
+                    >
+                      {syncingIds.has(subscription.id) ? 'Syncing…' : 'Resync'}
+                    </button>
+                    <button
+                      className="icon-btn sm"
+                      title="Remove calendar"
+                      aria-label={`Remove ${subscription.name}`}
+                      disabled={readOnly}
+                      onClick={() => void removeFeed(subscription)}
+                    >
+                      <Icon name="trash" size={13} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            <p className="tiny faint">
+              Automatic resync runs when the calendar is opened if the last attempt is older than 30 minutes. Failed
+              feeds retry on the next open. The status dot is green after success, yellow while syncing and red after a
+              failure.
+            </p>
+          </div>
+        </Modal>
+      ) : null}
 
       {form ? (
         <Modal
