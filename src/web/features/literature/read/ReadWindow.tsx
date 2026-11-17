@@ -52,14 +52,7 @@ const DEFAULT_LAYOUT: LayoutState = {
   chat: { open: true, dock: 'right', collapsed: true },
 };
 
-const LEFT_MIN = 220;
-const LEFT_MAX = 720;
-const RIGHT_MIN = 240;
-const RIGHT_MAX = 900;
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
+const MIN_PANEL_SIZE = 1;
 
 function readLayout(referenceId: string): LayoutState {
   try {
@@ -99,8 +92,8 @@ function readWidths(referenceId: string): { left: number; right: number } {
     if (!raw) return { left: 320, right: 360 };
     const parsed = JSON.parse(raw) as { left?: number; right?: number };
     return {
-      left: clamp(parsed.left ?? 320, LEFT_MIN, LEFT_MAX),
-      right: clamp(parsed.right ?? 360, RIGHT_MIN, RIGHT_MAX),
+      left: Number.isFinite(parsed.left) ? Math.max(MIN_PANEL_SIZE, parsed.left!) : 320,
+      right: Number.isFinite(parsed.right) ? Math.max(MIN_PANEL_SIZE, parsed.right!) : 360,
     };
   } catch {
     return { left: 320, right: 360 };
@@ -309,12 +302,10 @@ export function ReadWindow({ referenceId }: { referenceId: string }) {
     document.body.style.userSelect = 'none';
     const move = (moveEvent: PointerEvent) => {
       const delta = moveEvent.clientX - startX;
+      const next = side === 'left' ? startWidth + delta : startWidth - delta;
       setWidths((current) => ({
         ...current,
-        [side]:
-          side === 'left'
-            ? clamp(startWidth + delta, LEFT_MIN, LEFT_MAX)
-            : clamp(startWidth - delta, RIGHT_MIN, RIGHT_MAX),
+        [side]: Math.max(MIN_PANEL_SIZE, next),
       }));
     };
     const stop = () => {
@@ -350,8 +341,8 @@ export function ReadWindow({ referenceId }: { referenceId: string }) {
     document.body.style.userSelect = 'none';
     const move = (moveEvent: PointerEvent) => {
       const delta = moveEvent.clientY - startY;
-      const nextFirst = Math.max(88, startFirst + delta);
-      const nextSecond = Math.max(88, startSecond - delta);
+      const nextFirst = Math.max(MIN_PANEL_SIZE, startFirst + delta);
+      const nextSecond = Math.max(MIN_PANEL_SIZE, startSecond - delta);
       setWeights((current) => ({ ...current, [first]: nextFirst, [second]: nextSecond }));
     };
     const stop = () => {
