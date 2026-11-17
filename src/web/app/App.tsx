@@ -5,6 +5,7 @@ import { Shell } from './Shell';
 import { Dashboard } from '../features/dashboard/Dashboard';
 import { ProjectLayout } from '../features/projects/ProjectLayout';
 import { ProjectOverview } from '../features/projects/ProjectOverview';
+import { ProjectCodePage } from '../features/projects/ProjectCodePage';
 import { BoardPage } from '../features/tasks/BoardPage';
 import { NotesPage } from '../features/notes/NotesPage';
 import { NotePage } from '../features/notes/NotePage';
@@ -62,6 +63,7 @@ export default function App() {
           <Route path="literature" element={<LiteraturePage />} />
           <Route path="experiments" element={<ExperimentsPage />} />
           <Route path="questions" element={<QuestionsPage />} />
+          <Route path="code" element={<ProjectCodePage />} />
         </Route>
         <Route path="/literature/:id" element={<ReferencePage />} />
         <Route path="/experiments/:id" element={<ExperimentPage />} />

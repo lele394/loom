@@ -20,6 +20,7 @@ export type IconName =
   | 'note'
   | 'task'
   | 'book'
+  | 'git'
   | 'flask'
   | 'help'
   | 'link'
@@ -83,6 +84,14 @@ const paths: Record<IconName, React.ReactNode> = {
     </>
   ),
   plus: <path d="M12 5v14M5 12h14" />,
+  git: (
+    <>
+      <circle cx="6" cy="6" r="2" />
+      <circle cx="6" cy="18" r="2" />
+      <circle cx="18" cy="9" r="2" />
+      <path d="M6 8v8M18 11c0 4-5 3-9 3" />
+    </>
+  ),
   minus: <path d="M5 12h14" />,
   undo: <><path d="M9 14 4 9l5-5" /><path d="M4 9h9a6 6 0 0 1 0 12h-3" /></>,
   close: <path d="m6 6 12 12M18 6 6 18" />,

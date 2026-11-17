@@ -79,6 +79,40 @@ export interface ProjectCounts {
   questions: number;
 }
 
+export interface ProjectRepository {
+  id: string;
+  projectId: string;
+  provider: 'github';
+  owner: string;
+  name: string;
+  fullName: string;
+  url: string;
+  hasToken: boolean;
+  defaultBranch: string | null;
+  isPrivate: boolean;
+  lastSyncedAt: string | null;
+  lastSyncError: string | null;
+  commitCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RepositoryCommit {
+  id: string;
+  repositoryId: string;
+  projectId: string;
+  repositoryName: string;
+  sha: string;
+  shortSha: string;
+  message: string;
+  authorName: string;
+  authorLogin: string | null;
+  authorEmail: string | null;
+  committedAt: string;
+  url: string;
+  createdAt: string;
+}
+
 export interface BoardColumn {
   id: string;
   projectId: string;
@@ -313,6 +347,17 @@ export interface DiffItem {
   fields?: string[];
 }
 
+export interface DiffCommit {
+  repositoryId: string;
+  repositoryName: string;
+  sha: string;
+  shortSha: string;
+  title: string;
+  authorName: string;
+  committedAt: string;
+  url: string;
+}
+
 export interface DiffProject {
   projectId: string | null;
   projectName: string;
@@ -320,6 +365,7 @@ export interface DiffProject {
   updated: DiffItem[];
   completed: DiffItem[];
   removed: DiffItem[];
+  commits?: DiffCommit[];
   eventCount: number;
 }
 
@@ -329,6 +375,7 @@ export interface DailyDiff {
   totals: { added: number; updated: number; completed: number; removed: number };
   byProject: DiffProject[];
   eventCount: number;
+  commitCount?: number;
   eventSeqRange: [number, number] | null;
 }
 

@@ -2,7 +2,7 @@ import type { DailyDiff } from '../../shared/types';
 import type { AiContentPart } from './types';
 
 export const CHAT_PROMPT_VERSION = 'chat@1';
-export const DIGEST_PROMPT_VERSION = 'digest@1';
+export const DIGEST_PROMPT_VERSION = 'digest@2';
 export const ACTION_PROMPT_VERSION = 'action@1';
 
 export function buildChatSystemPrompt(options: {
@@ -61,6 +61,7 @@ You receive a deterministic JSON diff of one day's recorded activity. You must i
 Rules:
 - Never invent events, items, timestamps, page numbers or intentions.
 - Every bullet must correspond to an item present in the diff.
+- The diff may include a \`commits\` array imported from linked GitHub repositories. Treat those entries as real commit activity and mention them when relevant, without inventing commit contents.
 - If the diff is empty, reply with one sentence saying no activity was recorded.
 - Write in ${languageHint}.
 - Output exactly these Markdown sections: "## Focus", "## Progress", "## Open threads", "## Next steps".

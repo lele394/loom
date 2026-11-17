@@ -160,6 +160,7 @@ export function JournalPage() {
         <div className="diff-stat"><div className="n">{diff.totals.updated}</div><div className="label">Updated</div></div>
         <div className="diff-stat"><div className="n">{diff.totals.completed}</div><div className="label">Completed</div></div>
         <div className="diff-stat"><div className="n">{diff.totals.removed}</div><div className="label">Removed</div></div>
+        {diff.commitCount ? <div className="diff-stat"><div className="n">{diff.commitCount}</div><div className="label">Commits</div></div> : null}
       </div>
 
       <div className="dash-grid" style={{ alignItems: 'start' }}>
@@ -189,6 +190,22 @@ export function JournalPage() {
                   </div>
                 );
               })}
+              {group.commits?.length ? (
+                <div style={{ marginTop: 8 }}>
+                  <div className="tiny faint" style={{ textTransform: 'uppercase', letterSpacing: '.06em' }}>commits</div>
+                  {group.commits.map((commit) => (
+                    <div className="diff-item" key={`${commit.repositoryId}-${commit.sha}`}>
+                      <Icon name="git" size={13} />
+                      <a href={commit.url} target="_blank" rel="noreferrer" title={commit.title}>
+                        {commit.title}
+                      </a>
+                      <span className="tiny faint">
+                        {commit.repositoryName} · {commit.shortSha} · {commit.authorName}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ))}
         </div>

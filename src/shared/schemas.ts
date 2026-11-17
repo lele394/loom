@@ -68,6 +68,19 @@ export const projectUpdateSchema = z.object({
 
 export const projectArchiveSchema = z.object({ archived: z.boolean() });
 
+export const repositoryCreateSchema = z.object({
+  url: z.string().trim().min(3).max(500),
+  token: z.string().max(1000).optional().default(''),
+});
+
+export const repositoryUpdateSchema = z.object({
+  token: z.string().max(1000).nullable(),
+});
+
+export const repositorySyncSchema = z.object({
+  since: isoDateTime.optional(),
+});
+
 export const columnCreateSchema = z.object({
   name: z.string().trim().min(1).max(60),
   isDone: z.boolean().optional().default(false),

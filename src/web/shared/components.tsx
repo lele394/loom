@@ -472,11 +472,16 @@ export function ActivityFeed({
 }) {
   const projectNames = useMemo(() => new Map((projects ?? []).map((p) => [p.id, p.name])), [projects]);
   if (!events.length) return <Empty title="No activity yet" icon="activity">Actions will appear here as you work.</Empty>;
+  const today = new Date().toDateString();
   return (
     <div className="timeline">
-      {events.map((event) => (
+      {events.map((event) => {
+        const eventDay = new Date(event.occurredAt).toDateString();
+        return (
         <div className="timeline-row" key={event.id}>
-          <div className="when">{timeOf(event.occurredAt)}</div>
+          <div className="when" title={formatDateTime(event.occurredAt)}>
+            {eventDay === today ? timeOf(event.occurredAt) : relativeTime(event.occurredAt)}
+          </div>
           <div className="what">
             <span className="timeline-dot" />
             {showObjectLinks && event.objectId ? (
@@ -489,7 +494,8 @@ export function ActivityFeed({
             ) : null}
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

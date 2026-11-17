@@ -162,6 +162,12 @@ Executable checklist for Loom v1. Checked items are implemented and verified (20
   - retries with 4k/2.2k text and no JSON mode; higher output budgets for reasoning models
   - OpenAI-compatible provider accepts non-streamed JSON bodies and array content parts
   - raw dialog output is the metadata completion only; OCR text and the prompt are separate sections
+- [x] **P3.11 Linked GitHub repositories and commit timelines** (extension, 2026-11-17)
+  - per-project repository links (multiple repos supported), public or private with an encrypted read-only token
+  - commit metadata import via GitHub REST API (never a clone), deduplicated by SHA, capped at 1,000 recent commits per pull
+  - commits timestamped by author date and added to project activity plus the matching daily journal diff
+  - `digest@2` prompt includes imported commits; repository data covered by export/backup
+  - migration 006, API routes, Code project tab, repository sync test
 - [x] **P3.5 Routes, UI hooks, tests**
   - upload limits/sniff rejection, dedup, DOI not overwritten, SSRF cases, BibTeX round-trip, range requests
 

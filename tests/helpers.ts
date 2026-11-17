@@ -31,7 +31,13 @@ export interface TestHarness {
 }
 
 export async function createTestHarness(
-  options: { username?: string; env?: string; trustProxy?: boolean; allowedOrigins?: string[] } = {},
+  options: {
+    username?: string;
+    env?: string;
+    trustProxy?: boolean;
+    allowedOrigins?: string[];
+    githubApiBase?: string;
+  } = {},
 ): Promise<TestHarness> {
   const dir = mkdtempSync(path.join(tmpdir(), 'loom-test-'));
   const config = loadConfig({
@@ -44,6 +50,7 @@ export async function createTestHarness(
     maxUploadMb: 10,
     ...(options.trustProxy !== undefined ? { trustProxy: options.trustProxy } : {}),
     ...(options.allowedOrigins ? { allowedOrigins: options.allowedOrigins } : {}),
+    ...(options.githubApiBase ? { githubApiBase: options.githubApiBase } : {}),
   });
   const logger = pino({ level: 'silent' });
   const ctx = await createContext({ config, logger });

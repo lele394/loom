@@ -16,6 +16,8 @@ export interface RecordActivityInput {
   changes?: Record<string, { from: unknown; to: unknown }> | null;
   source?: 'ui' | 'api' | 'job' | 'ai';
   requestId?: string | null;
+  /** Optional original timestamp, e.g. the author date of an imported commit. */
+  occurredAt?: string;
 }
 
 interface ActivityRow {
@@ -76,7 +78,7 @@ export class ActivityService {
         input.changes ? JSON.stringify(input.changes) : null,
         input.source ?? 'ui',
         input.requestId ?? null,
-        this.clock.iso(),
+        input.occurredAt ?? this.clock.iso(),
       );
     return Number(row.lastInsertRowid);
   }
@@ -141,6 +143,25 @@ export class ActivityService {
         'SELECT * FROM activity_events WHERE occurred_at >= ? AND occurred_at < ? ORDER BY seq ASC',
       )
       .all(start.toISOString(), end.toISOString()) as ActivityRow[];
+    const commitRows = this.db
+      .prepare(
+        `SELECT c.*, r.owner AS repo_owner, r.name AS repo_name
+         FROM repository_commits c
+         JOIN project_repositories r ON r.id = c.repository_id
+         WHERE c.committed_at >= ? AND c.committed_at < ?
+         ORDER BY c.committed_at ASC`,
+      )
+      .all(start.toISOString(), end.toISOString()) as {
+      repository_id: string;
+      project_id: string;
+      sha: string;
+      message: string;
+      author_name: string;
+      committed_at: string;
+      url: string;
+      repo_owner: string;
+      repo_name: string;
+    }[];
 
     const projects = this.db.prepare('SELECT id, name FROM projects').all() as {
       id: string;
@@ -194,6 +215,7 @@ export class ActivityService {
           updated: [],
           completed: [],
           removed: [],
+          commits: [],
           eventCount: 0,
         };
         groups.set(projectId, group);
@@ -219,6 +241,23 @@ export class ActivityService {
       totals[bucket.bucket] += 1;
     }
 
+    if (commitRows.length) {
+      for (const commit of commitRows) {
+        const group = ensureGroup(commit.project_id);
+        group.commits ??= [];
+        group.commits.push({
+          repositoryId: commit.repository_id,
+          repositoryName: `${commit.repo_owner}/${commit.repo_name}`,
+          sha: commit.sha,
+          shortSha: commit.sha.slice(0, 7),
+          title: (commit.message.split('\n')[0] ?? '').trim() || commit.sha.slice(0, 7),
+          authorName: commit.author_name,
+          committedAt: commit.committed_at,
+          url: commit.url,
+        });
+      }
+    }
+
     const byProject = [...groups.values()]
       .map((group) => ({
         ...group,
@@ -226,6 +265,7 @@ export class ActivityService {
         updated: group.updated.sort((a, b) => a.title.localeCompare(b.title)),
         completed: group.completed.sort((a, b) => a.title.localeCompare(b.title)),
         removed: group.removed.sort((a, b) => a.title.localeCompare(b.title)),
+        commits: (group.commits ?? []).sort((a, b) => b.committedAt.localeCompare(a.committedAt)),
       }))
       .sort((a, b) => a.projectName.localeCompare(b.projectName));
 
@@ -235,6 +275,7 @@ export class ActivityService {
       totals,
       byProject,
       eventCount: rows.length,
+      commitCount: commitRows.length,
       eventSeqRange: rows.length ? [rows[0]!.seq, rows[rows.length - 1]!.seq] : null,
     };
   }

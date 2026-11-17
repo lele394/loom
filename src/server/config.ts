@@ -22,6 +22,7 @@ export interface AppConfig {
   logLevel: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent';
   workerEnabled: boolean;
   devWebUrl: string | null;
+  githubApiBase: string;
   appVersion: string;
 }
 
@@ -41,6 +42,7 @@ export interface ConfigOverrides {
   logLevel?: string;
   workerEnabled?: boolean;
   devWebUrl?: string | null;
+  githubApiBase?: string;
 }
 
 function envBool(value: string | undefined, fallback: boolean): boolean {
@@ -127,6 +129,10 @@ export function loadConfig(overrides: ConfigOverrides = {}): AppConfig {
     logLevel,
     workerEnabled: overrides.workerEnabled ?? envBool(process.env.LOOM_WORKER_ENABLED, true),
     devWebUrl,
+    githubApiBase:
+      overrides.githubApiBase ??
+      process.env.LOOM_GITHUB_API_BASE ??
+      'https://api.github.com',
     appVersion: '0.1.0',
   };
 }

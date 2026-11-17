@@ -14,6 +14,7 @@ import { installErrorHandler, installNotFoundHandler } from './http/errors';
 import { authRoutes } from './http/routes/auth';
 import { metaRoutes } from './http/routes/meta';
 import { projectRoutes } from './http/routes/projects';
+import { repositoryRoutes } from './http/routes/repositories';
 import { objectRoutes } from './http/routes/objects';
 import { noteRoutes } from './http/routes/notes';
 import { taskRoutes } from './http/routes/tasks';
@@ -126,6 +127,7 @@ export async function buildApp(ctx: Ctx) {
       await authRoutes(api, ctx);
       await metaRoutes(api, ctx);
       await projectRoutes(api, ctx);
+      await repositoryRoutes(api, ctx);
       await objectRoutes(api, ctx);
       await noteRoutes(api, ctx);
       await taskRoutes(api, ctx);

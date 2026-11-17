@@ -10,6 +10,7 @@ import { SettingsService } from './modules/settings/service';
 import { ActivityService } from './modules/activity/service';
 import { ObjectService } from './modules/objects/service';
 import { ProjectService } from './modules/projects/service';
+import { RepositoryService } from './modules/repositories/service';
 import { SearchService } from './modules/search/service';
 import { NoteService } from './modules/notes/service';
 import { TaskService } from './modules/tasks/service';
@@ -32,6 +33,7 @@ export interface Services {
   activity: ActivityService;
   objects: ObjectService;
   projects: ProjectService;
+  repositories: RepositoryService;
   search: SearchService;
   notes: NoteService;
   tasks: TaskService;
@@ -125,6 +127,7 @@ export async function createContext(options: CreateContextOptions = {}): Promise
   services.activity = activity;
   services.objects = new ObjectService(db, clock, activity);
   services.projects = new ProjectService(db, clock, activity, services.objects);
+  services.repositories = new RepositoryService(db, clock, activity, config);
   services.search = new SearchService(db, clock, settings, jobs);
   services.notes = new NoteService(db, clock, activity, services.objects, services.search, jobs);
   services.tasks = new TaskService(

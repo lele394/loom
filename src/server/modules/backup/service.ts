@@ -42,6 +42,8 @@ interface Manifest {
 const RESTORE_TABLES = [
   'users',
   'projects',
+  'project_repositories',
+  'repository_commits',
   'board_columns',
   'objects',
   'notes',
