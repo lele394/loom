@@ -74,6 +74,7 @@ export class OpenAiProvider implements AiProvider {
       let buffer = '';
       let rawBody = '';
       let yieldedText = false;
+      let sawReasoning = false;
       const contentText = (value: unknown): string => {
         if (typeof value === 'string') return value;
         if (Array.isArray(value)) {
@@ -103,8 +104,8 @@ export class OpenAiProvider implements AiProvider {
             if (!payload || payload === '[DONE]') continue;
             let parsed: {
               choices?: {
-                delta?: { content?: unknown };
-                message?: { content?: unknown };
+                delta?: { content?: unknown; reasoning_content?: unknown };
+                message?: { content?: unknown; reasoning_content?: unknown };
                 finish_reason?: string;
               }[];
               usage?: { prompt_tokens?: number; completion_tokens?: number };
@@ -121,6 +122,12 @@ export class OpenAiProvider implements AiProvider {
               });
             }
             const choice = parsed.choices?.[0];
+            if (
+              contentText(choice?.delta?.reasoning_content) ||
+              contentText(choice?.message?.reasoning_content)
+            ) {
+              sawReasoning = true;
+            }
             const delta = contentText(choice?.delta?.content) || contentText(choice?.message?.content);
             if (delta) {
               yieldedText = true;
@@ -144,19 +151,36 @@ export class OpenAiProvider implements AiProvider {
           if (tail.startsWith('{')) {
             try {
               const whole = JSON.parse(tail) as {
-                choices?: { message?: { content?: unknown }; text?: string }[];
+                choices?: {
+                  message?: { content?: unknown; reasoning_content?: unknown };
+                  text?: string;
+                }[];
                 error?: { message?: string };
               };
               if (whole.error?.message) {
                 throw Object.assign(new Error(whole.error.message), { code: 'provider_error' });
               }
+              if (contentText(whole.choices?.[0]?.message?.reasoning_content)) sawReasoning = true;
               const text =
                 contentText(whole.choices?.[0]?.message?.content) || whole.choices?.[0]?.text || '';
-              if (text) yield { type: 'text', text };
+              if (text) {
+                yieldedText = true;
+                yield { type: 'text', text };
+              }
             } catch (error) {
               if ((error as { code?: string }).code === 'provider_error') throw error;
             }
           }
+        }
+        if (!yieldedText) {
+          throw Object.assign(
+            new Error(
+              sawReasoning
+                ? 'The AI model returned only hidden reasoning and no answer. Increase the token budget or disable reasoning for this provider.'
+                : 'The AI provider returned an empty response.',
+            ),
+            { code: 'provider_empty_response' },
+          );
         }
       } finally {
         reader.releaseLock();

@@ -54,18 +54,30 @@ export function JournalPage() {
 
   const generate = async (force: boolean) => {
     setGenerating(true);
-    const before = state.data?.digest?.generatedAt ?? null;
     try {
       const { jobId } = await api.post<{ jobId: string | null }>(`/journal/${date}/generate`, { force });
-      toast(jobId ? 'Digest queued' : 'Digest already up to date', 'success');
-      for (let attempt = 0; attempt < 20; attempt++) {
+      if (!jobId) {
+        toast('Digest already up to date', 'success');
+        return;
+      }
+      toast('Digest queued — this can take up to a minute with a reasoning model.', 'info');
+      for (let attempt = 0; attempt < 120; attempt++) {
         await new Promise((resolve) => setTimeout(resolve, 1500));
-        const fresh = await api.get<JournalResponse>(`/journal/${date}`);
-        if (fresh.digest && fresh.digest.generatedAt && fresh.digest.generatedAt !== before) {
+        const job = await api.get<{ status: string; last_error: string | null }>(`/jobs/${jobId}`);
+        if (job.status === 'failed' || job.status === 'dead') {
+          const fresh = await api.get<JournalResponse>(`/journal/${date}`);
           state.setData(fresh);
-          break;
+          toast(job.last_error ?? 'The journal digest could not be generated.', 'error');
+          return;
+        }
+        if (job.status === 'succeeded') {
+          const fresh = await api.get<JournalResponse>(`/journal/${date}`);
+          state.setData(fresh);
+          toast(fresh.digest?.summaryMarkdown ? 'AI interpretation ready' : 'Journal entry generated', 'success');
+          return;
         }
       }
+      toast('The digest is still running. Check Settings → Jobs for progress.', 'info');
     } catch (error) {
       toast((error as Error).message, 'error');
     } finally {
@@ -187,13 +199,18 @@ export function JournalPage() {
               <strong className="small">AI interpretation</strong>
               {digest?.summaryMarkdown ? <span className="tiny faint">{digest.model ?? ''}</span> : null}
             </div>
+            {digest?.status === 'failed' ? (
+              <p className="small" style={{ color: 'var(--danger)' }}>
+                The last AI generation failed. Check Settings → Jobs for the provider error, then try again.
+              </p>
+            ) : null}
             {digest?.summaryMarkdown ? (
               <Markdown text={digest.summaryMarkdown} />
-            ) : (
+            ) : digest?.status !== 'failed' ? (
               <p className="small faint">
                 No AI summary. The deterministic diff above is the source of truth; configure a provider to add interpretation.
               </p>
-            )}
+            ) : null}
             {digest?.summaryMarkdown ? (
               <div className="row" style={{ marginTop: 12 }}>
                 <button className="btn sm" onClick={openTasks}>Next steps → tasks</button>

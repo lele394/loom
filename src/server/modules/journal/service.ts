@@ -143,6 +143,7 @@ export class JournalService {
     let summary: string | null = null;
     let model: string | null = null;
     let failed = false;
+    let failureMessage: string | null = null;
 
     if (config && (config.chatModel || config.kind === 'fake')) {
       const provider = createProvider(config);
@@ -155,18 +156,27 @@ export class JournalService {
             { role: 'system', content: prompt.system },
             { role: 'user', content: prompt.user },
           ],
-          maxTokens: 700,
+          // Reasoning models can spend a large part of the budget on hidden
+          // reasoning before emitting the actual Markdown answer.
+          maxTokens: 6000,
           temperature: 0.1,
           signal: AbortSignal.timeout(180_000),
         })) {
           if (chunk.type === 'text') text += chunk.text;
         }
-        summary = text.trim();
+        const trimmed = text.trim();
+        if (!trimmed) {
+          throw new Error(
+            'The AI model returned no digest text. It may have spent its whole token budget on hidden reasoning.',
+          );
+        }
+        summary = trimmed;
         model = `${config.chatModel || 'fake'} (${DIGEST_PROMPT_VERSION})`;
       } catch (error) {
         failed = true;
         summary = null;
         model = config.chatModel || 'fake';
+        failureMessage = error instanceof Error ? error.message : 'The digest summary could not be generated.';
       }
     }
 
@@ -220,7 +230,10 @@ export class JournalService {
     tx();
 
     if (failed) {
-      throw new AppError('provider_error', 'The digest summary could not be generated; the diff is preserved.');
+      throw new AppError(
+        'provider_error',
+        failureMessage ?? 'The digest summary could not be generated; the diff is preserved.',
+      );
     }
     const row = this.db
       .prepare('SELECT * FROM daily_digests WHERE user_id = ? AND date = ?')

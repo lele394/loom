@@ -69,4 +69,21 @@ describe('OpenAI-compatible provider', () => {
     });
     expect(await collect(provider, request)).toBe('Hello world');
   });
+
+  it('rejects a reasoning-only response instead of silently returning empty text', async () => {
+    const provider = await providerFor((_req, res) => {
+      res.setHeader('content-type', 'text/event-stream');
+      res.write(
+        `data: ${JSON.stringify({
+          choices: [{ delta: { reasoning_content: 'Let me think about this.' } }],
+        })}\n\n`,
+      );
+      res.write(
+        `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'length' }] })}\n\n`,
+      );
+      res.write('data: [DONE]\n\n');
+      res.end();
+    });
+    await expect(collect(provider, request)).rejects.toThrow(/hidden reasoning/i);
+  });
 });
