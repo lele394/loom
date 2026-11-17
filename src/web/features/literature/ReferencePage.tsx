@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, download } from '../../shared/api';
 import { useAsync, formatDate } from '../../shared/hooks';
@@ -9,6 +9,7 @@ import { AttachmentsPanel, LinksPanel, TagEditor } from '../../shared/components
 import { ErrorState, Field, Loading, Modal, Spinner, useConfirm, useToast } from '../../shared/ui';
 import { AiSummaryPanel, ReferenceNotesPanel } from './ReferencePanels';
 import { openReadWindow } from './read/readWindow';
+import { PdfAnnotator, type PdfAnnotatorHandle } from './read/PdfAnnotator';
 import { PDF_METADATA_MODES, READING_STATUSES, REFERENCE_TYPES, type PdfMetadataMode, type ReadingStatus, type ReferenceType } from '../../../shared/constants';
 import type { ObjectEnvelope, Project, Reference } from '../../../shared/types';
 import { useSession } from '../../app/session';
@@ -26,6 +27,7 @@ export function ReferencePage() {
   const projects = useAsync(() => api.get<{ projects: Project[] }>('/projects').then((data) => data.projects), []);
   const [form, setForm] = useState<Reference | null>(null);
   const [busy, setBusy] = useState(false);
+  const pdfViewerRef = useRef<PdfAnnotatorHandle | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [summaryBusy, setSummaryBusy] = useState(false);
   const [redoOpen, setRedoOpen] = useState(false);
@@ -291,11 +293,16 @@ export function ReferencePage() {
                   {pdf.textStatus === 'ready' ? `Text extracted${pdf.pageCount ? ` · ${pdf.pageCount} pages` : ''}` : pdf.textStatus === 'failed' ? `Extraction failed: ${pdf.textError ?? ''}` : 'Extracting text…'}
                 </span>
               </div>
-              <iframe
-                className="pdf-frame"
-                title={pdf.filename}
-                src={`/api/v1/attachments/${pdf.id}/download?inline=1${page ? `#page=${page}` : ''}`}
-              />
+              <div className="reference-pdf-viewer">
+                <PdfAnnotator
+                  attachmentId={pdf.id}
+                  title={form.title}
+                  initialPage={Math.max(1, Number(page ?? 1) || 1)}
+                  onPageChange={() => undefined}
+                  onStatusChange={() => undefined}
+                  handleRef={pdfViewerRef}
+                />
+              </div>
             </div>
           ) : (
             <div className="card">

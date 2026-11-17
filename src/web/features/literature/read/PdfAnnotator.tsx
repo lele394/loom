@@ -21,48 +21,16 @@ import type {
   PdfPoint,
   PdfRect,
 } from '../../../../shared/types';
+import {
+  canvasFilter,
+  DEFAULT_PDF_APPEARANCE,
+  usePdfAppearance,
+} from '../../../shared/pdfAppearance';
 import type { ReadSaveStatus } from './status';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
 type Tool = 'select' | 'text' | 'highlight' | 'ink' | 'note' | 'eraser';
-
-interface ReaderAppearance {
-  invert: boolean;
-  brightness: number;
-  contrast: number;
-  sepia: number;
-}
-
-const DEFAULT_READER_APPEARANCE: ReaderAppearance = {
-  invert: false,
-  brightness: 100,
-  contrast: 100,
-  sepia: 0,
-};
-
-function readReaderAppearance(): ReaderAppearance {
-  try {
-    const raw = localStorage.getItem('loom-pdf-reader-appearance');
-    if (!raw) return DEFAULT_READER_APPEARANCE;
-    const parsed = JSON.parse(raw) as Partial<ReaderAppearance>;
-    return {
-      invert: Boolean(parsed.invert),
-      brightness: Math.min(130, Math.max(50, Number(parsed.brightness) || 100)),
-      contrast: Math.min(160, Math.max(60, Number(parsed.contrast) || 100)),
-      sepia: Math.min(100, Math.max(0, Number(parsed.sepia) || 0)),
-    };
-  } catch {
-    return DEFAULT_READER_APPEARANCE;
-  }
-}
-
-function canvasFilter(appearance: ReaderAppearance): string {
-  const filters = [`brightness(${appearance.brightness}%)`, `contrast(${appearance.contrast}%)`];
-  if (appearance.sepia > 0) filters.push(`sepia(${appearance.sepia}%)`);
-  if (appearance.invert) filters.push('invert(1)', 'hue-rotate(180deg)');
-  return filters.join(' ');
-}
 
 type UndoEntry =
   | { kind: 'created'; annotation: PdfAnnotation }
@@ -124,7 +92,7 @@ export function PdfAnnotator({
   const [zoom, setZoom] = useState(1);
   const [currentPage, setCurrentPage] = useState(Math.max(1, initialPage));
   const [pageDraft, setPageDraft] = useState(String(Math.max(1, initialPage)));
-  const [appearance, setAppearance] = useState(readReaderAppearance);
+  const [appearance, updateAppearance] = usePdfAppearance();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [annotations, setAnnotations] = useState<PdfAnnotation[]>([]);
   const [tool, setTool] = useState<Tool>('select');
@@ -136,14 +104,6 @@ export function PdfAnnotator({
   const undoRef = useRef<() => Promise<void>>(async () => undefined);
 
   const setStatus = useCallback((status: ReadSaveStatus) => onStatusChangeRef.current(status), []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('loom-pdf-reader-appearance', JSON.stringify(appearance));
-    } catch {
-      // Appearance still applies for this session if storage is disabled.
-    }
-  }, [appearance]);
 
   useEffect(() => {
     if (!settingsOpen) return;
@@ -438,9 +398,6 @@ export function PdfAnnotator({
 
   const pageScale = scale;
   const viewerWidth = pageWidth * pageScale;
-  const updateAppearance = (patch: Partial<ReaderAppearance>) => {
-    setAppearance((current) => ({ ...current, ...patch }));
-  };
 
   return (
     <div
@@ -545,25 +502,25 @@ export function PdfAnnotator({
             <div className="pdf-preset-row">
               <button
                 className="btn sm"
-                onClick={() => setAppearance({ ...DEFAULT_READER_APPEARANCE })}
+                onClick={() => updateAppearance(DEFAULT_PDF_APPEARANCE)}
               >
                 Default
               </button>
               <button
                 className="btn sm"
-                onClick={() => setAppearance({ invert: true, brightness: 82, contrast: 100, sepia: 0 })}
+                onClick={() => updateAppearance({ invert: true, brightness: 82, contrast: 100, sepia: 0 })}
               >
                 Night
               </button>
               <button
                 className="btn sm"
-                onClick={() => setAppearance({ invert: false, brightness: 95, contrast: 92, sepia: 35 })}
+                onClick={() => updateAppearance({ invert: false, brightness: 95, contrast: 92, sepia: 35 })}
               >
                 Warm
               </button>
               <button
                 className="btn sm"
-                onClick={() => setAppearance({ invert: false, brightness: 100, contrast: 135, sepia: 0 })}
+                onClick={() => updateAppearance({ invert: false, brightness: 100, contrast: 135, sepia: 0 })}
               >
                 Contrast
               </button>

@@ -179,6 +179,7 @@ Executable checklist for Loom v1. Checked items are implemented and verified (20
   - persistent personal-note text scaling in read mode (75–300%) for editor and Markdown preview
   - PDF appearance cog panel with night/invert, default, warm and contrast presets
   - brightness, contrast and warmth sliders applied to the page canvas while annotations stay readable
+  - the same custom pdf.js viewer now replaces the reference-page iframe; appearance is a shared global store with live same-window and cross-tab synchronisation
 - [x] **P3.14 Protected Personal project** (extension, 2026-11-17)
   - migration 010 adds `projects.is_system`, unique system flag and the built-in Personal project with board columns
   - Personal is always listed first and restored automatically if missing, archived or deleted

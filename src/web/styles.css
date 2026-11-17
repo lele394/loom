@@ -796,7 +796,16 @@ mark { background: var(--warning-soft); color: var(--text); padding: 0 2px; bord
 
 /* ── Literature ───────────────────────────────────────────────────────── */
 .lit-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 22px; align-items: start; }
-.pdf-frame { width: 100%; height: min(72vh, 820px); border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+.reference-pdf-viewer {
+  display: flex;
+  width: 100%;
+  height: min(72vh, 820px);
+  min-height: 440px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
 .attachment-row { display: flex; align-items: center; gap: 9px; padding: 8px 0; border-bottom: 1px solid var(--border); }
 .attachment-row:last-child { border-bottom: 0; }
 .csv-preview { overflow-x: auto; border: 1px solid var(--border); border-radius: 9px; }
