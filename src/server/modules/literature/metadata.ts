@@ -31,6 +31,8 @@ export interface MetadataExtractionResult {
   ocrText: string | null;
   imageCount: number;
   metadataOrigin: 'ai' | 'heuristic';
+  /** Final prompt sent for the metadata call (images are summarised, not embedded). */
+  prompt?: string | null;
 }
 
 const modelSchema = z.object({
@@ -71,16 +73,207 @@ function cleanAbstract(value: string | null | undefined): string | null {
   return cleaned.length > 20 ? cleaned.slice(0, 50_000) : null;
 }
 
+function sliceJson(raw: string): string | null {
+  const cleaned = raw.replace(/^\uFEFF/, '').replace(/```(?:json)?/gi, '');
+  const start = cleaned.search(/[[{]/);
+  if (start < 0) return null;
+  const open = cleaned[start]!;
+  const close = open === '{' ? '}' : ']';
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = start; index < cleaned.length; index++) {
+    const char = cleaned[index]!;
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === open) depth++;
+    else if (char === close) {
+      depth--;
+      if (depth === 0) return cleaned.slice(start, index + 1);
+    }
+  }
+  return null;
+}
+
+/** Parse a model response even when it is fenced, wrapped in prose, or has trailing commas. */
 function parseJson(raw: string): unknown {
-  const cleaned = raw.replace(/```(?:json)?/gi, '').trim();
-  const start = cleaned.indexOf('{');
-  const end = cleaned.lastIndexOf('}');
-  if (start < 0 || end <= start) return null;
-  try {
-    return JSON.parse(cleaned.slice(start, end + 1));
-  } catch {
+  const slice = sliceJson(raw);
+  if (!slice) return null;
+  for (const candidate of [slice, slice.replace(/,\s*([}\]])/g, '$1')]) {
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      // try the next candidate
+    }
+  }
+  return null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const record = asRecord(item);
+      if (record) return record;
+    }
     return null;
   }
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+}
+
+function asString(value: unknown): string | undefined {
+  if (typeof value === 'string') return value.trim() || undefined;
+  if (typeof value === 'number') return String(value);
+  return undefined;
+}
+
+function splitAuthors(value: string): string[] {
+  const primary = value
+    .split(/\s*(?:;|\band\b|\n)\s*/i)
+    .map((author) => author.trim())
+    .filter(Boolean);
+  if (primary.length > 1) return primary;
+  const single = primary[0] ?? '';
+  if (single.includes(',')) {
+    const parts = single.split(',').map((part) => part.trim()).filter(Boolean);
+    // "Paul I. Penzes, Alain J. Martin" is a list, "Doe, Jane" is one name.
+    if (parts.length > 1 && parts.filter((part) => part.includes(' ')).length >= 2) return parts;
+  }
+  return single ? [single] : [];
+}
+
+function normaliseAuthors(value: unknown): string[] | undefined {
+  const names: string[] = [];
+  const add = (item: unknown) => {
+    if (typeof item === 'string') {
+      names.push(...splitAuthors(item));
+      return;
+    }
+    const record = asRecord(item);
+    if (!record) return;
+    const name = asString(record.name ?? record.fullName ?? record.full_name ?? record.displayName);
+    if (name) names.push(name);
+  };
+  if (Array.isArray(value)) for (const item of value) add(item);
+  else add(value);
+  const unique = [...new Set(names.map((name) => name.replace(/\s+/g, ' ').trim()).filter(Boolean))];
+  return unique.length ? unique.slice(0, 100) : undefined;
+}
+
+function normaliseYear(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 1000 && value <= 2200) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const match = /\b(1\d{3}|2[0-2]\d{2})\b/.exec(value);
+    if (match) return Number(match[1]);
+  }
+  return undefined;
+}
+
+function normaliseDate(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const month = /^(\d{4})-(\d{2})$/.exec(trimmed);
+  if (month) return `${trimmed}-01`;
+  if (/[A-Za-z]{3}/.test(trimmed)) {
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) {
+      const iso = parsed.toISOString().slice(0, 10);
+      if (iso >= '1000-01-01' && iso <= '2200-12-31') return iso;
+    }
+  }
+  return undefined;
+}
+
+function normaliseType(value: unknown): ReferenceType | undefined {
+  const clean = asString(value)?.toLowerCase().replace(/[_/]+/g, ' ').trim();
+  if (!clean) return undefined;
+  if ((REFERENCE_TYPES as readonly string[]).includes(clean)) return clean as ReferenceType;
+  if (/conference|proceedings|symposium|workshop/.test(clean)) return 'inproceedings';
+  if (/journal|article|paper/.test(clean)) return 'article';
+  if (/web|blog|page|site/.test(clean)) return 'website';
+  if (/thesis|dissertation/.test(clean)) return 'thesis';
+  if (/report|technical/.test(clean)) return 'report';
+  if (/preprint|arxiv/.test(clean)) return 'preprint';
+  if (/book|chapter/.test(clean)) return 'book';
+  return undefined;
+}
+
+/**
+ * Models often use different casing or aliases (`DOI`, `Year`, `Journal`, `author`).
+ * Map those onto the canonical schema before validation.
+ */
+function normaliseModelPayload(value: unknown): Record<string, unknown> | null {
+  let record = asRecord(value);
+  if (!record) return null;
+
+  const hasBibliographicKey = (item: Record<string, unknown>) =>
+    Object.keys(item).some((key) => /^(title|name|authors?|doi|year)$/.test(key.toLowerCase().replace(/[^a-z]/g, '')));
+  if (!hasBibliographicKey(record)) {
+    for (const wrapper of ['metadata', 'data', 'result', 'reference', 'paper', 'record']) {
+      const inner = asRecord(record[wrapper]);
+      if (inner && hasBibliographicKey(inner)) {
+        record = inner;
+        break;
+      }
+    }
+  }
+
+  const out: Record<string, unknown> = {};
+  const put = (key: string, value: unknown) => {
+    if (out[key] === undefined && value !== undefined) out[key] = value;
+  };
+
+  for (const [rawKey, rawValue] of Object.entries(record)) {
+    const key = rawKey.toLowerCase().replace(/[^a-z]/g, '');
+    if (key === 'title' || key === 'name' || key === 'papertitle' || key === 'documenttitle') {
+      put('title', asString(rawValue));
+    } else if (key === 'authors' || key === 'author' || key === 'creators' || key === 'creator') {
+      put('authors', normaliseAuthors(rawValue));
+    } else if (key === 'year' || key === 'publicationyear' || key === 'publishedyear' || key === 'pubyear') {
+      put('year', normaliseYear(rawValue));
+    } else if (
+      key === 'venue' ||
+      key === 'journal' ||
+      key === 'conference' ||
+      key === 'booktitle' ||
+      key === 'proceedings' ||
+      key === 'publication'
+    ) {
+      put('venue', asString(rawValue));
+    } else if (key === 'doi') {
+      put('doi', asString(rawValue));
+    } else if (key === 'url' || key === 'link' || key === 'uri' || key === 'webpage') {
+      put('url', asString(rawValue));
+    } else if (key === 'abstract' || key === 'description') {
+      put('abstract', asString(rawValue));
+    } else if (key === 'type' || key === 'documenttype' || key === 'kind' || key === 'entrytype') {
+      put('type', normaliseType(rawValue));
+    } else if (
+      key === 'publishedat' ||
+      key === 'publicationdate' ||
+      key === 'publisheddate' ||
+      key === 'date'
+    ) {
+      put('publishedAt', normaliseDate(rawValue));
+    }
+  }
+  return out;
+}
+
+/** Parse a raw provider response into validated metadata, or null when no object can be read. */
+export function parseMetadataResponse(raw: string): ExtractedMetadata | null {
+  const parsed = modelSchema.safeParse(normaliseModelPayload(parseJson(raw)));
+  return parsed.success ? normalise(parsed.data) : null;
 }
 
 function normalise(value: z.infer<typeof modelSchema>): ExtractedMetadata {
@@ -284,7 +477,7 @@ export class LiteratureMetadataService {
       }
       return output;
     };
-    const complete = async (payload: AiMessage[], json: boolean, maxTokens = 900): Promise<string> => {
+    const complete = async (payload: AiMessage[], json: boolean, maxTokens = 1600): Promise<string> => {
       const run = (useJson: boolean) =>
         collect({
           model: config.chatModel,
@@ -300,14 +493,31 @@ export class LiteratureMetadataService {
         return first;
       } catch (firstError) {
         const message = (firstError as Error).message.toLowerCase();
-        if (!json || !/response_format|json mode|json_object|http 400/.test(message)) throw firstError;
+        const code = (firstError as { code?: string }).code;
+        if (
+          !json ||
+          (code !== 'provider_error' && !/response_format|json mode|json_object|http 400/.test(message))
+        ) {
+          throw firstError;
+        }
         return run(false);
       }
     };
 
+    const parseMetadata = (raw: string) => {
+      const payload = normaliseModelPayload(parseJson(raw));
+      return { payload, parsed: modelSchema.safeParse(payload) };
+    };
+    const usableMetadata = (raw: string): boolean => {
+      const { parsed } = parseMetadata(raw);
+      return parsed.success && Object.keys(normalise(parsed.data)).length > 0;
+    };
+
     try {
       let ocrText = options.ocrText ?? null;
-      let raw = '';
+      let metadataRaw = '';
+      let promptUsed: string | null = null;
+      const promptText = (system: string, user: string) => `SYSTEM:\n${system}\n\nUSER:\n${user}`;
 
       if (mode === 'ocr' && !ocrText) {
         const ocrPrompt = buildOcrMessages(images);
@@ -317,47 +527,39 @@ export class LiteratureMetadataService {
         }
       }
 
-      let metadataRaw = '';
       if (mode === 'images') {
         const prompt = buildMetadataImageMessages({
           images,
           ...(input.titleHint ? { titleHint: input.titleHint } : {}),
           ...(input.filename ? { filename: input.filename } : {}),
         });
-        metadataRaw = await complete(messages(prompt.system, prompt.user), true);
-        raw = metadataRaw;
+        promptUsed = promptText(prompt.system, '[...page images attached...]');
+        metadataRaw = await complete(messages(prompt.system, prompt.user), true, 1600);
       } else {
         const text = mode === 'ocr' ? ocrText ?? '' : input.text;
-        const prompt = buildMetadataMessages({
-          text,
-          ...(input.titleHint ? { titleHint: input.titleHint } : {}),
-          ...(input.url ? { url: input.url } : {}),
-          ...(input.filename ? { filename: input.filename } : {}),
-        });
-        metadataRaw = await complete(messages(prompt.system, prompt.user), true);
-        if ((!metadataRaw.trim() || !modelSchema.safeParse(parseJson(metadataRaw)).success) && text.trim()) {
-          // Some small/local models return an empty completion in JSON mode. Ask again
-          // with a compact, explicit JSON-only prompt and no response_format.
-          metadataRaw = await complete(
-            [
-              {
-                role: 'system',
-                content:
-                  'You extract bibliographic metadata. Return ONLY a JSON object with keys title, authors (array), year, venue, doi, url, abstract, type, publishedAt. Use null when unknown. No markdown, no commentary.',
-              },
-              {
-                role: 'user',
-                content: `${input.titleHint ? `Title hint: ${input.titleHint}\n` : ''}Text:\n${text.slice(0, 6000)}`,
-              },
-            ],
-            false,
-            700,
-          );
+        const ask = async (limit: number, json: boolean, maxTokens: number) => {
+          const prompt = buildMetadataMessages({
+            text: text.slice(0, limit),
+            ...(input.titleHint ? { titleHint: input.titleHint } : {}),
+            ...(input.url ? { url: input.url } : {}),
+            ...(input.filename ? { filename: input.filename } : {}),
+          });
+          promptUsed = promptText(prompt.system, prompt.user);
+          return complete(messages(prompt.system, prompt.user), json, maxTokens);
+        };
+
+        metadataRaw = await ask(8_000, true, 2000);
+        // Small/local models sometimes return nothing when the prompt is long or when
+        // JSON mode is unsupported. Retry with less text and no response_format.
+        if (!usableMetadata(metadataRaw) && text.trim()) {
+          metadataRaw = await ask(4_000, false, 2000);
         }
-        raw = mode === 'ocr' ? `--- OCR TEXT ---\n${ocrText ?? ''}\n\n--- METADATA JSON ---\n${metadataRaw}` : metadataRaw;
+        if (!usableMetadata(metadataRaw) && text.trim()) {
+          metadataRaw = await ask(2_200, false, 1600);
+        }
       }
 
-      const parsed = modelSchema.safeParse(parseJson(metadataRaw));
+      const { parsed } = parseMetadata(metadataRaw);
       const aiMetadata = parsed.success ? normalise(parsed.data) : {};
       const sourceText = mode === 'images' ? input.text : mode === 'ocr' ? ocrText ?? input.text : input.text;
       const heuristic = heuristicMetadataFromText(sourceText, input.titleHint);
@@ -366,21 +568,29 @@ export class LiteratureMetadataService {
       if (!Object.keys(metadata).length) {
         return {
           ...base,
-          raw,
+          raw: metadataRaw,
           model,
           ocrText,
-          error: raw.trim() ? 'The AI response was not valid metadata JSON.' : 'The AI provider returned no text.',
+          prompt: promptUsed,
+          error: metadataRaw.trim()
+            ? 'The AI response did not contain usable metadata.'
+            : 'The AI provider returned no text for the metadata request.',
         };
       }
       return {
         metadata,
-        raw,
+        raw: metadataRaw,
         model,
-        error: parsed.success ? null : 'The AI response was not valid metadata JSON; heuristic fallback used.',
+        error: parsed.success
+          ? null
+          : metadataRaw.trim()
+            ? 'The AI response was not valid metadata JSON; heuristic fallback used.'
+            : 'The AI provider returned no text for the metadata request; heuristic fallback used.',
         mode,
         ocrText,
         imageCount: images.length,
         metadataOrigin: aiHasFields ? 'ai' : 'heuristic',
+        prompt: promptUsed,
       };
     } catch (error) {
       return { ...base, model, error: (error as Error).message, ocrText: options.ocrText ?? null };

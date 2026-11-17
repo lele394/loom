@@ -11,6 +11,7 @@ import { formatBibtex, parseBibtex, splitAuthors } from '../../core/bibtex';
 import { extractPageMetadata, extractReadableText, safeFetch } from '../../core/net';
 import { extractPdf } from '../../core/pdf';
 import { ocrWithTesseract, withPdfImages, type RenderedPdfPage } from '../../core/pdfImages';
+import { METADATA_PROMPT_VERSION } from '../../ai/prompts';
 import type { LiteratureMetadataService, MetadataExtractionResult } from './metadata';
 import type { AppConfig } from '../../config';
 import { Readable } from 'node:stream';
@@ -748,7 +749,7 @@ export class LiteratureService {
         metadataMode: mode,
         metadataRequestedMode: requestedMode,
         metadataModel: result.model,
-        metadataPromptVersion: 'metadata@1',
+        metadataPromptVersion: METADATA_PROMPT_VERSION,
         ...(result.error ? { metadataError: result.error.slice(0, 500) } : {}),
       },
     };

@@ -73,6 +73,46 @@ describe('attachments and literature', () => {
     expect(redo.body.textPreview).toContain('Energy efficient computing');
   });
 
+  it('normalises alias-keyed model JSON and keeps OCR text out of the raw output', async () => {
+    await harness.request('POST', '/ai/providers', {
+      name: 'Alias metadata',
+      kind: 'fake',
+      chatModel: '',
+      embedModel: 'fake-embed',
+      isDefault: true,
+      extra: { metadataStyle: 'aliases' },
+    });
+    const reference = await harness.request('POST', '/references', {
+      title: 'Old title',
+      projectId: harness.projectId,
+    });
+    await harness.ctx.services.attachments.upload(
+      reference.body.id,
+      createReadStream(path.join(process.cwd(), 'tests/fixtures/paper.pdf')),
+      'Alias paper.pdf',
+      'application/pdf',
+      harness.userId,
+    );
+    const redo = await harness.request('POST', `/references/${reference.body.id}/reextract-metadata`, {
+      source: 'pdf',
+      mode: 'text',
+    });
+    expect(redo.status).toBe(200);
+    expect(redo.body.raw.trim().startsWith('{')).toBe(true);
+    expect(redo.body.raw).not.toContain('--- OCR TEXT ---');
+    expect(redo.body.metadata).toMatchObject({
+      title: 'Aliased Metadata Paper',
+      authors: ['Ada Lovelace', 'Alan Turing'],
+      year: 2002,
+      venue: 'GLSVLSI',
+      doi: '10.1145/1234567.1234568',
+      url: 'https://example.org/paper',
+      type: 'inproceedings',
+      publishedAt: '2002-04-18',
+    });
+    expect(redo.body.prompt).toContain('Return only the JSON object');
+  });
+
   const hasPoppler = spawnSync('pdftoppm', ['-v'], { stdio: 'ignore' }).status === 0;
   it.skipIf(!hasPoppler)('supports image and OCR metadata modes with rendered pages', async () => {
     await harness.request('POST', '/ai/providers', {
@@ -107,7 +147,8 @@ describe('attachments and literature', () => {
       mode: 'ocr',
     });
     expect(ocr.status).toBe(200);
-    expect(ocr.body.raw).toContain('OCR TEXT');
+    expect(ocr.body.raw.trim().startsWith('{')).toBe(true);
+    expect(ocr.body.raw).not.toContain('OCR TEXT');
     expect(ocr.body.ocrText).toBeTruthy();
   });
 

@@ -90,24 +90,38 @@ export class FakeProvider implements AiProvider {
       const textStart = source.indexOf('"""');
       const textEnd = source.lastIndexOf('"""');
       const body = textStart >= 0 && textEnd > textStart ? source.slice(textStart + 3, textEnd).trim() : '';
-      const answer = JSON.stringify({
-        title:
-          titleHint ||
-          body
-            .split(/\n/)
-            .find((line) => line.trim().length > 10)
-            ?.trim()
-            .slice(0, 300) ||
-          'Imported source',
-        authors: [],
-        year: null,
-        venue: null,
-        doi,
-        url: null,
-        abstract: body.replace(/\s+/g, ' ').slice(0, 400) || null,
-        type: 'article',
-        publishedAt: null,
-      });
+      const answer = JSON.stringify(
+        this.config.extra.metadataStyle === 'aliases'
+          ? {
+              Title: 'Aliased Metadata Paper',
+              Authors: 'Ada Lovelace; Alan Turing',
+              Year: '2002',
+              Publication: 'GLSVLSI',
+              DOI: 'https://doi.org/10.1145/1234567.1234568',
+              URL: 'https://example.org/paper',
+              Abstract: 'This paper studies energy-delay efficiency in VLSI computation.',
+              Type: 'Conference Paper',
+              PublishedAt: '2002-04-18',
+            }
+          : {
+              title:
+                titleHint ||
+                body
+                  .split(/\n/)
+                  .find((line) => line.trim().length > 10)
+                  ?.trim()
+                  .slice(0, 300) ||
+                'Imported source',
+              authors: [],
+              year: null,
+              venue: null,
+              doi,
+              url: null,
+              abstract: body.replace(/\s+/g, ' ').slice(0, 400) || null,
+              type: 'article',
+              publishedAt: null,
+            },
+      );
       for (const word of answer.split(/(\s+)/)) {
         if (word) yield { type: 'text', text: word };
       }

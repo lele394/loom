@@ -29,7 +29,7 @@ export function ReferencePage() {
   const [summaryBusy, setSummaryBusy] = useState(false);
   const [redoOpen, setRedoOpen] = useState(false);
   const [redoSource, setRedoSource] = useState<'pdf' | 'url' | 'fields'>('pdf');
-  const [redoMode, setRedoMode] = useState<PdfMetadataMode>('text');
+  const [redoMode, setRedoMode] = useState<PdfMetadataMode>(meta?.app.pdfMetadataMode ?? 'ocr');
   const [redoBusy, setRedoBusy] = useState(false);
   const [redoResult, setRedoResult] = useState<{
     raw: string | null;
@@ -42,6 +42,7 @@ export function ReferencePage() {
     imageCount: number;
     textPreview: string;
     metadataOrigin?: 'ai' | 'heuristic';
+    prompt?: string | null;
   } | null>(null);
 
   useEffect(() => {
@@ -67,7 +68,7 @@ export function ReferencePage() {
   const openRedo = () => {
     setRedoResult(null);
     setRedoSource(pdf ? 'pdf' : form.url ? 'url' : 'fields');
-    setRedoMode((form.extra.metadataMode as PdfMetadataMode | undefined) ?? meta?.app.pdfMetadataMode ?? 'ocr');
+    setRedoMode(meta?.app.pdfMetadataMode ?? 'ocr');
     setRedoOpen(true);
   };
 
@@ -99,7 +100,7 @@ export function ReferencePage() {
           metadataSource: redoResult.metadataOrigin ?? 'ai',
           metadataMode: redoResult.mode,
           metadataModel: redoResult.model,
-          metadataPromptVersion: 'metadata@1',
+          metadataPromptVersion: /\(metadata@\d+\)/.exec(redoResult.model ?? '')?.[0]?.slice(1, -1) ?? 'metadata@2',
         },
       });
       setForm(updated);
@@ -451,9 +452,15 @@ export function ReferencePage() {
                   <span className="tiny faint">{redoResult.textPreview.length} chars of source preview</span>
                 </div>
                 {redoResult.error ? <div className="banner" style={{ background: 'var(--danger-soft)', color: 'var(--danger)', marginBottom: 0 }}>{redoResult.error}</div> : null}
-                <Field label="Raw model output" help="Exactly what the provider returned, before validation.">
+                <Field label="Raw model output" help="Exactly what the provider returned for the metadata call, before validation.">
                   <pre className="raw-output">{redoResult.raw ?? '(no output)'}</pre>
                 </Field>
+                {redoResult.prompt ? (
+                  <details>
+                    <summary className="small muted" style={{ cursor: 'pointer' }}>Prompt sent</summary>
+                    <pre className="raw-output">{redoResult.prompt}</pre>
+                  </details>
+                ) : null}
                 <details>
                   <summary className="small muted" style={{ cursor: 'pointer' }}>Parsed metadata ({Object.keys(redoResult.metadata).length} fields)</summary>
                   <pre className="raw-output">{JSON.stringify(redoResult.metadata, null, 2)}</pre>

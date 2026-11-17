@@ -194,6 +194,10 @@ The model returns exactly:
  "url":null,"abstract":null,"type":null,"publishedAt":null}
 ```
 
+The prompt (`metadata@2`) is deliberately strict: it asks for one JSON object, names every field, forbids markdown/commentary, requires a bare DOI, and states that OCR noise, headers, copyright lines and download stamps must be ignored. The input is capped at the first 8,000 characters — bibliographic fields live on page one, and a smaller prompt fits small local context windows. If the response is empty or unusable, the service retries with 4,000 and then 2,200 characters, without `response_format`, because some local servers reject or ignore JSON mode. The final prompt actually sent is returned to the UI so it can be inspected.
+
+Responses are parsed tolerantly before validation: fenced JSON, JSON embedded in prose, arrays of objects, a `{"metadata": ...}` wrapper, trailing commas, and alias/case variants (`Title`, `DOI`, `Year`, `Journal`, `Publication`, `author` as a string) are accepted and mapped onto the canonical fields. DOIs are stripped to their bare form, URLs restricted to http(s), years bounded and types mapped to the enum. The dialog's **Raw model output** is only the metadata completion; OCR text has its own collapsed section.
+
 Rules: extract only facts present in the source; never invent authors, years, venues, DOIs or abstracts; return `null` for unknown fields. The result is validated with zod and normalised (DOI prefixes stripped, URLs restricted to http(s), years bounded, type enum). A failure or missing provider leaves the deterministic metadata (filename, page title/description, DOI detected in the PDF) intact — ingestion never depends on AI availability. The reference page still lets the user edit every field.
 
 ### Input modes

@@ -72,11 +72,28 @@ export class OpenAiProvider implements AiProvider {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let rawBody = '';
+      let yieldedText = false;
+      const contentText = (value: unknown): string => {
+        if (typeof value === 'string') return value;
+        if (Array.isArray(value)) {
+          return value
+            .map((part) =>
+              part && typeof part === 'object' && typeof (part as { text?: unknown }).text === 'string'
+                ? (part as { text: string }).text
+                : '',
+            )
+            .join('');
+        }
+        return '';
+      };
       try {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          buffer += decoder.decode(value, { stream: true });
+          const chunk = decoder.decode(value, { stream: true });
+          buffer += chunk;
+          if (rawBody.length < 8 * 1024 * 1024) rawBody += chunk;
           const lines = buffer.split('\n');
           buffer = lines.pop() ?? '';
           for (const line of lines) {
@@ -85,7 +102,11 @@ export class OpenAiProvider implements AiProvider {
             const payload = trimmed.slice(5).trim();
             if (!payload || payload === '[DONE]') continue;
             let parsed: {
-              choices?: { delta?: { content?: string }; finish_reason?: string }[];
+              choices?: {
+                delta?: { content?: unknown };
+                message?: { content?: unknown };
+                finish_reason?: string;
+              }[];
               usage?: { prompt_tokens?: number; completion_tokens?: number };
               error?: { message?: string };
             };
@@ -99,8 +120,12 @@ export class OpenAiProvider implements AiProvider {
                 code: 'provider_error',
               });
             }
-            const delta = parsed.choices?.[0]?.delta?.content;
-            if (delta) yield { type: 'text', text: delta };
+            const choice = parsed.choices?.[0];
+            const delta = contentText(choice?.delta?.content) || contentText(choice?.message?.content);
+            if (delta) {
+              yieldedText = true;
+              yield { type: 'text', text: delta };
+            }
             if (parsed.usage) {
               yield {
                 type: 'usage',
@@ -110,6 +135,27 @@ export class OpenAiProvider implements AiProvider {
             }
             const finish = parsed.choices?.[0]?.finish_reason;
             if (finish) yield { type: 'finish', reason: finish };
+          }
+        }
+        if (!yieldedText) {
+          // Some OpenAI-compatible servers ignore `stream: true` and return one JSON body.
+          rawBody += decoder.decode();
+          const tail = rawBody.trim();
+          if (tail.startsWith('{')) {
+            try {
+              const whole = JSON.parse(tail) as {
+                choices?: { message?: { content?: unknown }; text?: string }[];
+                error?: { message?: string };
+              };
+              if (whole.error?.message) {
+                throw Object.assign(new Error(whole.error.message), { code: 'provider_error' });
+              }
+              const text =
+                contentText(whole.choices?.[0]?.message?.content) || whole.choices?.[0]?.text || '';
+              if (text) yield { type: 'text', text };
+            } catch (error) {
+              if ((error as { code?: string }).code === 'provider_error') throw error;
+            }
           }
         }
       } finally {
