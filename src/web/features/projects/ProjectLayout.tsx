@@ -101,6 +101,7 @@ export function ProjectLayout() {
           <div className="row" style={{ gap: 8 }}>
             <span className="dot" data-color={project.color} />
             <h1 className="page-title">{project.name}</h1>
+            {project.isSystem ? <span className="badge info">Built-in</span> : null}
             {project.status === 'archived' ? <span className="badge warning">Archived</span> : null}
           </div>
           <p className="page-sub">{project.description || 'No description yet.'}</p>
@@ -126,9 +127,11 @@ export function ProjectLayout() {
             <Icon name="sparkles" size={15} /> Ask AI
           </button>
           <button className="btn" onClick={openSettings}>Project settings</button>
-          <button className="btn" onClick={() => void archive()}>
-            <Icon name="archive" size={15} /> {project.status === 'archived' ? 'Unarchive' : 'Archive'}
-          </button>
+          {!project.isSystem ? (
+            <button className="btn" onClick={() => void archive()}>
+              <Icon name="archive" size={15} /> {project.status === 'archived' ? 'Unarchive' : 'Archive'}
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -148,15 +151,27 @@ export function ProjectLayout() {
           onClose={() => setSettingsOpen(false)}
           footer={
             <>
-              <button className="btn danger" style={{ marginRight: 'auto' }} onClick={() => void remove()}>Delete project</button>
+              {!project.isSystem ? (
+                <button className="btn danger" style={{ marginRight: 'auto' }} onClick={() => void remove()}>Delete project</button>
+              ) : null}
               <button className="btn" onClick={() => setSettingsOpen(false)}>Cancel</button>
               <button className="btn primary" disabled={busy} onClick={() => void save()}>Save</button>
             </>
           }
         >
           <div className="stack">
+            {project.isSystem ? (
+              <p className="tiny faint">
+                This built-in project is always available and cannot be renamed, archived or deleted.
+              </p>
+            ) : null}
             <Field label="Name">
-              <input className="input" value={name} onChange={(event) => setName(event.target.value)} />
+              <input
+                className="input"
+                value={name}
+                disabled={project.isSystem}
+                onChange={(event) => setName(event.target.value)}
+              />
             </Field>
             <Field label="Description">
               <textarea className="textarea" value={description} onChange={(event) => setDescription(event.target.value)} />

@@ -129,6 +129,7 @@ export async function createContext(options: CreateContextOptions = {}): Promise
   services.activity = activity;
   services.objects = new ObjectService(db, clock, activity);
   services.projects = new ProjectService(db, clock, activity, services.objects);
+  services.projects.ensureSystemProject();
   services.repositories = new RepositoryService(db, clock, activity, settings, config);
   services.calendar = new CalendarService(db, clock, activity);
   services.search = new SearchService(db, clock, settings, jobs);

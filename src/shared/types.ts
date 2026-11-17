@@ -66,6 +66,7 @@ export interface Project {
   description: string;
   color: Palette;
   status: 'active' | 'archived';
+  isSystem: boolean;
   createdAt: string;
   updatedAt: string;
   counts?: ProjectCounts;

@@ -46,7 +46,7 @@ Data lives in `./data` by default: `loom.db`, content-addressed attachments, bac
 
 | Area | What you get |
 | --- | --- |
-| Projects | Independent workspaces, colour dots, archive/read-only, per-project boards, calendars and linked GitHub repositories with commit timelines |
+| Projects | Independent workspaces, colour dots, archive/read-only, a protected built-in Personal project, per-project boards, calendars and linked GitHub repositories with commit timelines |
 | Calendar | Project calendars plus a global month view aggregating every project, type-coloured accents, upcoming bar, external `.ics` subscriptions |
 | Tasks | Configurable columns, drag-and-drop + keyboard moves, priorities, due dates, checklists |
 | Notes | Block editor, Markdown shortcuts, wikilinks, backlinks, versions, conflict-safe autosave, local draft recovery |
@@ -85,6 +85,8 @@ AI is also used for **literature ingestion**: drop one or more PDFs or links and
 - **Text extraction**: the PDF's embedded text (fastest and fully local).
 
 The mode is configurable in Settings → AI & search and overridable per PDF submission. Reference pages have **Redo metadata**, which re-runs extraction and prints the prompt sent, the raw metadata completion and the parsed fields before you apply anything. The extractor asks for one strict JSON object, retries with shorter inputs when a provider returns nothing, and accepts common key variants (`Title`, `DOI`, `Year`, `Journal`/`Publication`) plus fenced or prose-wrapped JSON. Literature uses checkbox selection and select-all for **bulk re-extraction**; each item can choose its own mode, results go into a processing list, and validated metadata is applied automatically. The processing list is backed by durable server jobs, so it survives refreshes and keeps working with the tab closed; dropped PDFs waiting to upload are persisted in IndexedDB and resume after a refresh. Reference pages keep **personal notes**, **AI summaries**, links and attachments separate; summaries are queued jobs that can be regenerated with extra instructions. **Read mode** opens in a new tab as a dockable workspace: the PDF stays central, personal notes (Markdown, 30-second autosave) sit alongside it, and bookmarks (page + ≤250-char note), AI summary and AI chat are collapsible panels that can be moved, resized or closed. The built-in PDF viewer supports text selection, selected-text and area highlights, ink and sticky-note annotations, persisted automatically to the server, with Ctrl+Z undo. Chat is pinned to the open paper. Without a provider, deterministic extraction (filename, DOI, page metadata) still works.
+
+The workspace always includes a **Personal** project for notes, tasks, references, calendars and anything else that does not belong to a research project. It is listed first, cannot be renamed, archived or deleted, and is restored automatically if missing.
 
 Each project has a **Calendar** tab for deadlines, meetings, events, milestones and focus blocks. Items have a title, type, optional end time and longer description; the project colour defines the item's main colour and the type defines its left accent. The global **Calendar** destination aggregates all projects and shows the next items in a chronological **Upcoming** bar.
 
@@ -201,7 +203,7 @@ If you outgrow SQLite, the repository and `VectorIndex`/`BlobStore`/`JobHandler`
 
 ## Verification
 
-The repository ships with 88 tests covering auth/CSRF, notes and conflict handling, wikilinks/backlinks, tasks and ordering, FTS + chunk search + embeddings, PDF extraction and sniffing, AI streaming/citations, backup/restore, export integrity, timezone/DST and BibTeX.
+The repository ships with 89 tests covering auth/CSRF, notes and conflict handling, wikilinks/backlinks, tasks and ordering, FTS + chunk search + embeddings, PDF extraction and sniffing, AI streaming/citations, backup/restore, export integrity, timezone/DST and BibTeX.
 
 ```bash
 npm run typecheck && npm run check:boundaries && npm test && npm run build

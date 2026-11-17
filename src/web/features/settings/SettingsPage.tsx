@@ -719,7 +719,9 @@ function DataSection() {
               <div className="tiny faint">Deleted project · restores its objects</div>
             </div>
             <button className="btn sm" onClick={() => void restoreProject(project)}>Restore</button>
-            <button className="icon-btn sm" aria-label="Purge project" onClick={() => void purgeProject(project)}><Icon name="trash" size={13} /></button>
+            {!project.isSystem ? (
+              <button className="icon-btn sm" aria-label="Purge project" onClick={() => void purgeProject(project)}><Icon name="trash" size={13} /></button>
+            ) : null}
           </div>
         ))}
         {trash.data?.objects.map((object) => (

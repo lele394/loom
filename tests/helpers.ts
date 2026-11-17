@@ -107,7 +107,8 @@ export async function createTestHarness(
   csrf = setupBody.csrfToken;
 
   const projects = await request('GET', '/projects');
-  const projectId = (projects.body as { projects: { id: string }[] }).projects[0]!.id;
+  const projectRows = (projects.body as { projects: { id: string; isSystem: boolean }[] }).projects;
+  const projectId = (projectRows.find((project) => !project.isSystem) ?? projectRows[0])!.id;
 
   const login = async () => {
     const response = await app.inject({

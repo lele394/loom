@@ -175,6 +175,11 @@ Executable checklist for Loom v1. Checked items are implemented and verified (20
   - global Calendar destination aggregates every project with a chronological Upcoming bar
   - month grid supports multi-day events, click-to-create, edit/delete, archived-project read-only state
   - calendar activity recorded in the project timeline; export/backup coverage and API tests
+- [x] **P3.14 Protected Personal project** (extension, 2026-11-17)
+  - migration 010 adds `projects.is_system`, unique system flag and the built-in Personal project with board columns
+  - Personal is always listed first and restored automatically if missing, archived or deleted
+  - rename, archive, delete and purge are refused in the API; project settings hide destructive controls
+  - works with every object type, calendars and external feeds; covered by a protection/use test
 - [x] **P3.13 External calendar sync** (extension, 2026-11-17)
   - per-project `.ics` subscriptions with SSRF-safe fetching and 5 MB feed cap
   - iCalendar parsing with timezones, recurrence expansion, cancelled-event filtering and type mapping

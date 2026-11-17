@@ -14,6 +14,7 @@ interface ProjectRow {
   color: Palette;
   status: 'active' | 'archived';
   settings_json: string;
+  is_system: number;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -36,6 +37,7 @@ function mapProject(row: ProjectRow): Project {
     description: row.description,
     color: row.color,
     status: row.status,
+    isSystem: row.is_system === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -65,6 +67,52 @@ export class ProjectService {
     private readonly activity: ActivityService,
     private readonly objects: ObjectService,
   ) {}
+
+  /** The Personal project is part of the workspace and must always be available. */
+  ensureSystemProject(): void {
+    const existing = this.db
+      .prepare('SELECT * FROM projects WHERE is_system = 1 ORDER BY created_at ASC LIMIT 1')
+      .get() as ProjectRow | undefined;
+    const now = this.clock.iso();
+    if (existing) {
+      if (existing.deleted_at || existing.status !== 'active') {
+        this.db
+          .prepare("UPDATE projects SET deleted_at = NULL, status = 'active', updated_at = ? WHERE id = ?")
+          .run(now, existing.id);
+      }
+      const columns = this.db
+        .prepare('SELECT COUNT(*) AS count FROM board_columns WHERE project_id = ?')
+        .get(existing.id) as { count: number };
+      if (columns.count === 0) {
+        const insertColumn = this.db.prepare(
+          `INSERT INTO board_columns (id, project_id, name, is_done, position, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        );
+        DEFAULT_COLUMNS.forEach((column, index) => {
+          insertColumn.run(newId('col'), existing.id, column.name, column.isDone ? 1 : 0, index, now, now);
+        });
+      }
+      return;
+    }
+
+    const id = newId('prj');
+    const tx = this.db.transaction(() => {
+      this.db
+        .prepare(
+          `INSERT INTO projects (id, name, description, color, status, settings_json, is_system, created_at, updated_at)
+           VALUES (?, 'Personal', ?, 'sage', 'active', '{}', 1, ?, ?)`,
+        )
+        .run(id, 'A place for anything that does not belong to another project.', now, now);
+      const insertColumn = this.db.prepare(
+        `INSERT INTO board_columns (id, project_id, name, is_done, position, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      );
+      DEFAULT_COLUMNS.forEach((column, index) => {
+        insertColumn.run(newId('col'), id, column.name, column.isDone ? 1 : 0, index, now, now);
+      });
+    });
+    tx();
+  }
 
   create(input: { name: string; description?: string; color?: string }, actorId: string): Project {
     const id = newId('prj');
@@ -142,7 +190,7 @@ export class ProjectService {
     const rows = this.db
       .prepare(
         `SELECT * FROM projects WHERE deleted_at IS NULL ${includeArchived ? '' : "AND status = 'active'"}
-         ORDER BY created_at ASC`,
+         ORDER BY is_system DESC, created_at ASC`,
       )
       .all() as ProjectRow[];
     return rows.map((row) => ({ ...mapProject(row), counts: this.countsFor(row.id) }));
@@ -161,10 +209,13 @@ export class ProjectService {
     actorId: string,
   ): Project {
     const row = this.requireRow(id);
+    if (row.is_system === 1 && patch.name !== undefined && patch.name.trim() !== row.name) {
+      throw new AppError('bad_request', 'The Personal project cannot be renamed.');
+    }
     this.db
       .prepare('UPDATE projects SET name = ?, description = ?, color = ?, updated_at = ? WHERE id = ?')
       .run(
-        patch.name?.trim() || row.name,
+        row.is_system === 1 ? row.name : patch.name?.trim() || row.name,
         patch.description ?? row.description,
         patch.color ?? row.color,
         this.clock.iso(),
@@ -181,6 +232,9 @@ export class ProjectService {
 
   setArchived(id: string, archived: boolean, actorId: string): Project {
     const row = this.requireRow(id);
+    if (row.is_system === 1) {
+      throw new AppError('bad_request', 'The Personal project cannot be archived.');
+    }
     this.db
       .prepare('UPDATE projects SET status = ?, updated_at = ? WHERE id = ?')
       .run(archived ? 'archived' : 'active', this.clock.iso(), id);
@@ -195,6 +249,9 @@ export class ProjectService {
 
   softDelete(id: string, actorId: string): void {
     const row = this.requireRow(id);
+    if (row.is_system === 1) {
+      throw new AppError('bad_request', 'The Personal project cannot be deleted.');
+    }
     const now = this.clock.iso();
     const tx = this.db.transaction(() => {
       const objects = this.db
@@ -253,6 +310,9 @@ export class ProjectService {
 
   purge(id: string, actorId: string): void {
     const row = this.requireRow(id, true);
+    if (row.is_system === 1) {
+      throw new AppError('bad_request', 'The Personal project cannot be deleted.');
+    }
     const objects = this.db
       .prepare('SELECT id FROM objects WHERE project_id = ?')
       .all(id) as { id: string }[];
