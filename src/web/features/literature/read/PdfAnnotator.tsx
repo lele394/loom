@@ -424,35 +424,37 @@ export function PdfAnnotator({
         ) : null}
       </div>
 
-      <Modal
-        title={noteEditor?.annotation ? 'Edit note' : 'Add a note'}
-        onClose={() => (noteBusy ? undefined : setNoteEditor(null))}
-        footer={
-          <>
-            {noteEditor?.annotation ? (
-              <button
-                className="btn danger"
-                disabled={noteBusy}
-                onClick={() => {
-                  const annotation = noteEditor.annotation;
-                  if (!annotation) return;
-                  setNoteEditor(null);
-                  void deleteAnnotation(annotation);
-                }}
-              >
-                Delete
+      {noteEditor ? (
+        <Modal
+          title={noteEditor.annotation ? 'Edit note' : 'Add a note'}
+          onClose={() => {
+            if (!noteBusy) setNoteEditor(null);
+          }}
+          footer={
+            <>
+              {noteEditor.annotation ? (
+                <button
+                  className="btn danger"
+                  disabled={noteBusy}
+                  onClick={() => {
+                    const annotation = noteEditor.annotation;
+                    if (!annotation) return;
+                    setNoteEditor(null);
+                    void deleteAnnotation(annotation);
+                  }}
+                >
+                  Delete
+                </button>
+              ) : null}
+              <button className="btn" disabled={noteBusy} onClick={() => setNoteEditor(null)}>
+                Cancel
               </button>
-            ) : null}
-            <button className="btn" disabled={noteBusy} onClick={() => setNoteEditor(null)}>
-              Cancel
-            </button>
-            <button className="btn primary" disabled={noteBusy || !noteEditor?.text.trim()} onClick={() => void saveNote()}>
-              {noteBusy ? 'Saving…' : 'Save note'}
-            </button>
-          </>
-        }
-      >
-        {noteEditor ? (
+              <button className="btn primary" disabled={noteBusy || !noteEditor.text.trim()} onClick={() => void saveNote()}>
+                {noteBusy ? 'Saving…' : 'Save note'}
+              </button>
+            </>
+          }
+        >
           <div className="stack sm">
             <span className="small muted">Page {noteEditor.page}</span>
             <textarea
@@ -465,8 +467,8 @@ export function PdfAnnotator({
               onChange={(event) => setNoteEditor((current) => (current ? { ...current, text: event.target.value } : current))}
             />
           </div>
-        ) : null}
-      </Modal>
+        </Modal>
+      ) : null}
     </div>
   );
 }

@@ -430,8 +430,8 @@ export function ReadWindow({ referenceId }: { referenceId: string }) {
           </button>
           <button
             className="icon-btn sm"
-            title="Open another reading window"
-            aria-label="Open another reading window"
+            title="Open another reading tab"
+            aria-label="Open another reading tab"
             onClick={() => openReadWindow(reference.id, { page: currentPage })}
           >
             <Icon name="external" size={14} />
@@ -451,7 +451,7 @@ export function ReadWindow({ referenceId }: { referenceId: string }) {
           <button className="btn sm" onClick={() => navigate(`/literature/${reference.id}`)}>
             Reference
           </button>
-          <button className="icon-btn sm" title="Close this window" aria-label="Close this window" onClick={() => window.close()}>
+          <button className="icon-btn sm" title="Close this tab" aria-label="Close this tab" onClick={() => window.close()}>
             <Icon name="close" size={14} />
           </button>
         </div>

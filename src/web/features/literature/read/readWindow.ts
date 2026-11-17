@@ -8,11 +8,9 @@ export function readModePath(referenceId: string, options: { page?: number; pane
 
 export function openReadWindow(referenceId: string, options: { page?: number } = {}): Window | null {
   const path = readModePath(referenceId, options);
-  const opened = window.open(
-    path,
-    `loom-read-${referenceId}-${Date.now()}`,
-    'popup=yes,width=1500,height=960,left=80,top=60',
-  );
+  // An explicit blank target opens a normal new tab (or window, per browser settings)
+  // instead of forcing a sized popup.
+  const opened = window.open(path, '_blank');
   if (opened) {
     opened.focus();
     return opened;

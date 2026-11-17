@@ -218,7 +218,7 @@ export function ReferencePage() {
           <button
             className="btn sm"
             onClick={() => openReadWindow(form.id, { page: page ? Number(page) || 1 : 1 })}
-            title="Open the reading workspace in a separate window"
+            title="Open the reading workspace in a new tab"
           >
             <Icon name="book" size={14} /> Read mode
           </button>

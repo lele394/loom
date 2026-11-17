@@ -145,7 +145,7 @@ Executable checklist for Loom v1. Checked items are implemented and verified (20
   - personal notes moved to their own panel; separate AI summary artifact and queue job
   - summary regeneration with added instructions and selectable extraction mode
   - bookmarks API (page + 250-char note), migration 003, export/backup coverage
-  - dedicated read window with a dockable panel layout, resizable left/right docks and a panel-spawning topbar
+  - dedicated read tab with a dockable panel layout, resizable left/right docks and a panel-spawning topbar
   - Markdown personal-notes editor with 30-second autosave and saved/unsaved/no-connection indicator
   - bookmarks, AI summary and paper-bound AI chat as collapsible, movable and closable dock panels
   - built-in pdf.js reader with highlight, ink and sticky-note annotations saved through the API (migration 005)
