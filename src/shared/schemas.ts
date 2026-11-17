@@ -15,6 +15,7 @@ import {
   REFERENCE_TYPES,
   PDF_METADATA_MODES,
   PDF_ANNOTATION_KINDS,
+  CALENDAR_ITEM_TYPES,
 } from './constants';
 
 const id = z.string().min(3).max(64);
@@ -79,6 +80,35 @@ export const repositoryUpdateSchema = z.object({
 
 export const repositorySyncSchema = z.object({
   since: isoDateTime.optional(),
+});
+
+export const calendarItemCreateSchema = z.object({
+  projectId: id,
+  title: z.string().trim().min(1).max(200),
+  type: z.enum(CALENDAR_ITEM_TYPES),
+  description: z.string().max(20_000).optional().default(''),
+  startsAt: isoDateTime,
+  endsAt: z.union([isoDateTime, z.null()]).optional().default(null),
+});
+
+export const calendarItemUpdateSchema = z.object({
+  projectId: id.optional(),
+  title: z.string().trim().min(1).max(200).optional(),
+  type: z.enum(CALENDAR_ITEM_TYPES).optional(),
+  description: z.string().max(20_000).optional(),
+  startsAt: isoDateTime.optional(),
+  endsAt: z.union([isoDateTime, z.null()]).optional(),
+});
+
+export const calendarQuerySchema = z.object({
+  from: isoDateTime.optional(),
+  to: isoDateTime.optional(),
+  projectId: id.optional(),
+});
+
+export const calendarUpcomingQuerySchema = z.object({
+  projectId: id.optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(8),
 });
 
 export const columnCreateSchema = z.object({

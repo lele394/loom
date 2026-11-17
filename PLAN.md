@@ -169,6 +169,12 @@ Executable checklist for Loom v1. Checked items are implemented and verified (20
   - commits timestamped by author date and added to project activity plus the matching daily journal diff
   - `digest@2` prompt includes imported commits; repository data covered by export/backup
   - migration 006, API routes, Code project tab, repository sync test
+- [x] **P3.12 Project and global calendars** (extension, 2026-11-17)
+  - per-project calendar items with title, type, optional end time and description (migration 008)
+  - project colour drives the item body, type drives a red/yellow/blue/purple/green left accent
+  - global Calendar destination aggregates every project with a chronological Upcoming bar
+  - month grid supports multi-day events, click-to-create, edit/delete, archived-project read-only state
+  - calendar activity recorded in the project timeline; export/backup coverage and API tests
 - [x] **P3.5 Routes, UI hooks, tests**
   - upload limits/sniff rejection, dedup, DOI not overwritten, SSRF cases, BibTeX round-trip, range requests
 

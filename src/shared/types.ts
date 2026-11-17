@@ -1,5 +1,6 @@
 import type {
   AiScope,
+  CalendarItemType,
   ExperimentStatus,
   InboxKind,
   LinkKind,
@@ -102,6 +103,20 @@ export interface ProjectRepository {
   lastSyncedAt: string | null;
   lastSyncError: string | null;
   commitCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CalendarItem {
+  id: string;
+  projectId: string;
+  projectName: string;
+  projectColor: Palette;
+  title: string;
+  type: CalendarItemType;
+  description: string;
+  startsAt: string;
+  endsAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -6,6 +6,7 @@ import { Dashboard } from '../features/dashboard/Dashboard';
 import { ProjectLayout } from '../features/projects/ProjectLayout';
 import { ProjectOverview } from '../features/projects/ProjectOverview';
 import { ProjectCodePage } from '../features/projects/ProjectCodePage';
+import { CalendarPage, ProjectCalendarPage } from '../features/calendar/CalendarPage';
 import { BoardPage } from '../features/tasks/BoardPage';
 import { NotesPage } from '../features/notes/NotesPage';
 import { NotePage } from '../features/notes/NotePage';
@@ -49,6 +50,7 @@ export default function App() {
     <Shell>
       <Routes>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/inbox" element={<InboxPage />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/journal" element={<JournalPage />} />
@@ -63,6 +65,7 @@ export default function App() {
           <Route path="literature" element={<LiteraturePage />} />
           <Route path="experiments" element={<ExperimentsPage />} />
           <Route path="questions" element={<QuestionsPage />} />
+          <Route path="calendar" element={<ProjectCalendarPage />} />
           <Route path="code" element={<ProjectCodePage />} />
         </Route>
         <Route path="/literature/:id" element={<ReferencePage />} />

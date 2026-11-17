@@ -14,6 +14,7 @@ import { NewProjectModal } from '../shared/components';
 
 const NAV: { to: string; label: string; icon: IconName; exact?: boolean }[] = [
   { to: '/', label: 'Dashboard', icon: 'dashboard', exact: true },
+  { to: '/calendar', label: 'Calendar', icon: 'calendar' },
   { to: '/inbox', label: 'Inbox', icon: 'inbox' },
   { to: '/journal', label: 'Journal', icon: 'journal' },
   { to: '/activity', label: 'Activity', icon: 'activity' },

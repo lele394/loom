@@ -72,6 +72,9 @@ export const REFERENCE_TYPES = [
 ] as const;
 export type ReferenceType = (typeof REFERENCE_TYPES)[number];
 
+export const CALENDAR_ITEM_TYPES = ['deadline', 'meeting', 'event', 'milestone', 'focus'] as const;
+export type CalendarItemType = (typeof CALENDAR_ITEM_TYPES)[number];
+
 export const EXPERIMENT_STATUSES = ['planned', 'running', 'completed', 'abandoned'] as const;
 export type ExperimentStatus = (typeof EXPERIMENT_STATUSES)[number];
 

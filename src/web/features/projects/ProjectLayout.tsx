@@ -90,6 +90,7 @@ export function ProjectLayout() {
     { to: `/projects/${project.id}/literature`, label: 'Literature' },
     { to: `/projects/${project.id}/experiments`, label: 'Experiments' },
     { to: `/projects/${project.id}/questions`, label: 'Questions' },
+    { to: `/projects/${project.id}/calendar`, label: 'Calendar' },
     { to: `/projects/${project.id}/code`, label: 'Code' },
   ];
 

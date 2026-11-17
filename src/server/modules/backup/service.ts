@@ -43,6 +43,7 @@ const RESTORE_TABLES = [
   'users',
   'github_credentials',
   'projects',
+  'calendar_items',
   'project_repositories',
   'repository_commits',
   'board_columns',
