@@ -144,9 +144,11 @@ Executable checklist for Loom v1. Checked items are implemented and verified (20
   - metadata processing queue with status dots and automatic metadata application
   - personal notes moved to their own panel; separate AI summary artifact and queue job
   - summary regeneration with added instructions and selectable extraction mode
-  - read mode with focused PDF, notes, summary, bookmarks and optional AI chat
   - bookmarks API (page + 250-char note), migration 003, export/backup coverage
-  - Firefox PDF annotation limitation documented; annotated-copy attach flow
+  - dedicated read window with a dockable panel layout, resizable left/right docks and a panel-spawning topbar
+  - Markdown personal-notes editor with 30-second autosave and saved/unsaved/no-connection indicator
+  - bookmarks, AI summary and paper-bound AI chat as collapsible, movable and closable dock panels
+  - built-in pdf.js reader with highlight, ink and sticky-note annotations saved through the API (migration 005)
 - [x] **P3.9 Durable processing queues** (extension, 2026-11-16)
   - bulk metadata re-extraction moved to `reference.reextract` jobs; migration 004 adds `jobs.dismissed_at`
   - literature queue hydrates from `GET /references/extraction-jobs` and polls until idle, so refresh or a closed tab loses nothing

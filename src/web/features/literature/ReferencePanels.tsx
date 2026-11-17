@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../shared/api';
 import { PDF_METADATA_MODES, type PdfMetadataMode } from '../../../shared/constants';
-import type { Reference, ReferenceBookmark } from '../../../shared/types';
-import { Empty, Field, Spinner, useToast } from '../../shared/ui';
+import type { Reference } from '../../../shared/types';
+import { Field, Spinner, useToast } from '../../shared/ui';
 import { Markdown } from '../../shared/markdown';
 import { formatDateTime, relativeTime } from '../../shared/hooks';
 
@@ -173,102 +173,5 @@ export function AiSummaryPanel({
         Summaries use the selected extraction mode; OCR is the default. They never overwrite personal notes.
       </span>
     </div>
-  );
-}
-
-export function BookmarksPanel({
-  referenceId,
-  currentPage,
-  onOpenPage,
-}: {
-  referenceId: string;
-  currentPage: number;
-  onOpenPage: (page: number) => void;
-}) {
-  const { toast } = useToast();
-  const [bookmarks, setBookmarks] = useState<ReferenceBookmark[]>([]);
-  const [page, setPage] = useState(currentPage);
-  const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const load = async () => {
-    try {
-      const data = await api.get<{ bookmarks: ReferenceBookmark[] }>(`/references/${referenceId}/bookmarks`);
-      setBookmarks(data.bookmarks);
-    } catch {
-      setBookmarks([]);
-    }
-  };
-
-  useEffect(() => {
-    void load();
-  }, [referenceId]);
-
-  useEffect(() => {
-    setPage(currentPage);
-  }, [currentPage]);
-
-  const add = async () => {
-    setBusy(true);
-    try {
-      await api.post(`/references/${referenceId}/bookmarks`, { page, note });
-      setNote('');
-      await load();
-    } catch (error) {
-      toast((error as Error).message, 'error');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const remove = async (id: string) => {
-    try {
-      await api.del(`/bookmarks/${id}`);
-      await load();
-    } catch (error) {
-      toast((error as Error).message, 'error');
-    }
-  };
-
-  return (
-    <details className="bookmark-panel" open>
-      <summary>
-        <strong className="small">Bookmarks</strong>
-        <span className="tiny faint"> · {bookmarks.length}</span>
-      </summary>
-      <div className="stack sm" style={{ marginTop: 10 }}>
-        <div className="row" style={{ alignItems: 'flex-end' }}>
-          <Field label="Page">
-            <input
-              className="input"
-              type="number"
-              min={1}
-              style={{ width: 78 }}
-              value={page}
-              onChange={(event) => setPage(Math.max(1, Number(event.target.value) || 1))}
-            />
-          </Field>
-          <Field label="Note (max 250)">
-            <input
-              className="input"
-              maxLength={250}
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder="What is on this page?"
-            />
-          </Field>
-          <button className="btn sm" disabled={busy} onClick={() => void add()}>Add</button>
-          <span className="tiny faint">{note.length}/250</span>
-        </div>
-        {bookmarks.length === 0 ? <span className="tiny faint">No bookmarks yet.</span> : null}
-        {bookmarks.map((bookmark) => (
-          <div className="row" key={bookmark.id} style={{ alignItems: 'flex-start' }}>
-            <button className="badge accent" onClick={() => onOpenPage(bookmark.page)}>p. {bookmark.page}</button>
-            <span className="small grow">{bookmark.note || <span className="faint">No note</span>}</span>
-            <button className="icon-btn sm" aria-label="Delete bookmark" onClick={() => void remove(bookmark.id)}>×</button>
-          </div>
-        ))}
-      </div>
-    </details>
   );
 }

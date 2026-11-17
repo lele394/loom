@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useSession } from './session';
 import { AuthPage } from '../features/auth/AuthPages';
 import { Shell } from './Shell';
@@ -10,7 +10,7 @@ import { NotesPage } from '../features/notes/NotesPage';
 import { NotePage } from '../features/notes/NotePage';
 import { LiteraturePage } from '../features/literature/LiteraturePage';
 import { ReferencePage } from '../features/literature/ReferencePage';
-import { ReadPage } from '../features/literature/ReadPage';
+import { ReadWindow } from '../features/literature/read/ReadWindow';
 import { ExperimentsPage } from '../features/experiments/ExperimentsPage';
 import { ExperimentPage } from '../features/experiments/ExperimentPage';
 import { QuestionsPage } from '../features/questions/QuestionsPage';
@@ -38,9 +38,12 @@ function Splash() {
 
 export default function App() {
   const { loading, user, meta, setupRequired } = useSession();
+  const location = useLocation();
+  const readMatch = /^\/literature\/([^/]+)\/read\/?$/.exec(location.pathname);
   if (loading) return <Splash />;
   if (setupRequired) return <AuthPage mode="setup" />;
   if (!user || !meta) return <AuthPage mode="login" />;
+  if (readMatch) return <ReadWindow referenceId={readMatch[1]!} />;
   return (
     <Shell>
       <Routes>
@@ -61,7 +64,6 @@ export default function App() {
           <Route path="questions" element={<QuestionsPage />} />
         </Route>
         <Route path="/literature/:id" element={<ReferencePage />} />
-        <Route path="/literature/:id/read" element={<ReadPage />} />
         <Route path="/experiments/:id" element={<ExperimentPage />} />
         <Route path="/objects/:id" element={<ObjectPage />} />
         <Route path="/settings" element={<SettingsPage />} />
