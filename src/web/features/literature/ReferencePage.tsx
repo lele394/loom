@@ -8,6 +8,7 @@ import { Markdown } from '../../shared/markdown';
 import { AttachmentsPanel, LinksPanel, TagEditor } from '../../shared/components';
 import { ErrorState, Field, Loading, Modal, Spinner, useConfirm, useToast } from '../../shared/ui';
 import { AiSummaryPanel, ReferenceNotesPanel } from './ReferencePanels';
+import { openReadWindow } from './read/readWindow';
 import { PDF_METADATA_MODES, READING_STATUSES, REFERENCE_TYPES, type PdfMetadataMode, type ReadingStatus, type ReferenceType } from '../../../shared/constants';
 import type { ObjectEnvelope, Project, Reference } from '../../../shared/types';
 import { useSession } from '../../app/session';
@@ -214,7 +215,11 @@ export function ReferencePage() {
           <button className="btn sm" onClick={() => void download(`/references.bib?ids=${form.id}`, `${form.citeKey}.bib`)}>
             <Icon name="download" size={14} /> BibTeX
           </button>
-          <button className="btn sm" onClick={() => navigate(`/literature/${form.id}/read`)}>
+          <button
+            className="btn sm"
+            onClick={() => openReadWindow(form.id, { page: page ? Number(page) || 1 : 1 })}
+            title="Open the reading workspace in a separate window"
+          >
             <Icon name="book" size={14} /> Read mode
           </button>
           <button className="btn sm" onClick={() => ai.askAbout({ id: form.id, title: form.title, type: 'reference' }, 'Summarise this paper and relate it to my work.')}>

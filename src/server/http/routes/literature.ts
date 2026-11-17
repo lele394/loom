@@ -7,6 +7,8 @@ import {
   bookmarkCreateSchema,
   bookmarkUpdateSchema,
   bulkReextractMetadataSchema,
+  pdfAnnotationCreateSchema,
+  pdfAnnotationUpdateSchema,
   pdfMetadataModeSchema,
   referenceCreateSchema,
   referenceListQuerySchema,
@@ -329,6 +331,34 @@ export async function literatureRoutes(app: FastifyInstance, ctx: Ctx): Promise<
   app.get('/attachments/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
     return reply.send(ctx.services.attachments.get(id));
+  });
+
+  app.get('/attachments/:id/annotations', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    return reply.send({ annotations: ctx.services.attachments.listAnnotations(id) });
+  });
+
+  app.post('/attachments/:id/annotations', async (request, reply) => {
+    if (!request.user) throw new Error('unauthenticated');
+    const { id } = request.params as { id: string };
+    const input = parse(pdfAnnotationCreateSchema, request.body);
+    return reply
+      .status(201)
+      .send(ctx.services.attachments.createAnnotation(id, input, request.user.id));
+  });
+
+  app.patch('/annotations/:id', async (request, reply) => {
+    if (!request.user) throw new Error('unauthenticated');
+    const { id } = request.params as { id: string };
+    const input = parse(pdfAnnotationUpdateSchema, request.body);
+    return reply.send(ctx.services.attachments.updateAnnotation(id, input, request.user.id));
+  });
+
+  app.delete('/annotations/:id', async (request, reply) => {
+    if (!request.user) throw new Error('unauthenticated');
+    const { id } = request.params as { id: string };
+    ctx.services.attachments.deleteAnnotation(id, request.user.id);
+    return reply.send({ ok: true });
   });
 
   app.get('/attachments/:id/download', async (request, reply) => {

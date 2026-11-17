@@ -237,6 +237,56 @@ describe('attachments and literature', () => {
     expect(updated.body.aiSummaryModel).toContain('summary@1');
   });
 
+  it('stores, updates and removes PDF annotations', async () => {
+    const reference = await harness.request('POST', '/references', { title: 'Annotated paper' });
+    const attachment = await harness.ctx.services.attachments.upload(
+      reference.body.id,
+      createReadStream(path.join(process.cwd(), 'tests/fixtures/paper.pdf')),
+      'paper.pdf',
+      'application/pdf',
+      harness.userId,
+    );
+    const highlight = await harness.request('POST', `/attachments/${attachment.id}/annotations`, {
+      page: 1,
+      kind: 'highlight',
+      color: '#f2c94c',
+      geometry: { rect: { x: 0.1, y: 0.2, width: 0.3, height: 0.08 } },
+      text: '',
+    });
+    expect(highlight.status).toBe(201);
+    expect(highlight.body.geometry.rect.width).toBeCloseTo(0.3);
+
+    const ink = await harness.request('POST', `/attachments/${attachment.id}/annotations`, {
+      page: 2,
+      kind: 'ink',
+      geometry: { points: [{ x: 0.1, y: 0.1 }, { x: 0.2, y: 0.2 }] },
+    });
+    expect(ink.status).toBe(201);
+
+    const invalid = await harness.request('POST', `/attachments/${attachment.id}/annotations`, {
+      page: 1,
+      kind: 'highlight',
+      geometry: {},
+    });
+    expect(invalid.status).toBe(400);
+
+    const list = await harness.request('GET', `/attachments/${attachment.id}/annotations`);
+    expect(list.body.annotations).toHaveLength(2);
+    expect(list.body.annotations[0].page).toBe(1);
+
+    const patched = await harness.request('PATCH', `/annotations/${highlight.body.id}`, {
+      text: 'This is the key claim.',
+      color: '#7cc7a0',
+    });
+    expect(patched.body.text).toBe('This is the key claim.');
+    expect(patched.body.color).toBe('#7cc7a0');
+
+    await harness.request('DELETE', `/annotations/${ink.body.id}`);
+    const remaining = await harness.request('GET', `/attachments/${attachment.id}/annotations`);
+    expect(remaining.body.annotations).toHaveLength(1);
+    expect(remaining.body.annotations[0].id).toBe(highlight.body.id);
+  });
+
   it('creates and manages page bookmarks with a 250 character note limit', async () => {
     const reference = await harness.request('POST', '/references', { title: 'Bookmarked paper' });
     const created = await harness.request('POST', `/references/${reference.body.id}/bookmarks`, {

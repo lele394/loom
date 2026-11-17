@@ -57,6 +57,7 @@ const RESTORE_TABLES = [
   'links',
   'attachments',
   'attachment_text',
+  'pdf_annotations',
   'chunks',
   'activity_events',
   'daily_digests',
