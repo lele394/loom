@@ -858,6 +858,91 @@ mark { background: var(--warning-soft); color: var(--text); padding: 0 2px; bord
 .swatch { width: 82px; border: 1px solid var(--border); border-radius: 10px; padding: 7px; background: var(--surface); cursor: pointer; text-align: center; font-size: 11px; color: var(--text-muted); }
 .swatch.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--ring); }
 .swatch .preview { height: 34px; border-radius: 7px; margin-bottom: 5px; border: 1px solid var(--border); }
+.custom-palette-preview {
+  background: conic-gradient(from 90deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);
+}
+.custom-palette-builder { display: flex; flex-direction: column; gap: 14px; }
+.custom-palette-top {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.color-wheel-column { display: flex; flex-direction: column; gap: 6px; }
+.color-wheel {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  cursor: crosshair;
+  touch-action: none;
+  background:
+    radial-gradient(circle at 50% 50%, #ffffff 0%, rgba(255, 255, 255, 0) 68%),
+    conic-gradient(from 90deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);
+  box-shadow: inset 0 0 0 1px var(--border), 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+.wheel-marker {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.wheel-marker.primary { width: 16px; height: 16px; border-width: 3px; }
+.custom-palette-builder .seg { display: flex; width: 100%; }
+.custom-palette-builder .seg button { flex: 1; }
+.custom-harmony-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+.custom-harmony-grid .btn {
+  justify-content: center;
+  padding: 5px 4px;
+  font-size: 11.5px;
+}
+.custom-base-colors { display: flex; flex-wrap: wrap; gap: 8px; }
+.custom-color-field { display: flex; flex-direction: column; gap: 4px; }
+.custom-color-field input[type='color'] {
+  width: 42px;
+  height: 30px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  cursor: pointer;
+}
+.custom-color-field code { font-size: 10.5px; color: var(--text-faint); }
+.custom-swatches { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.custom-swatch {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-2);
+  cursor: pointer;
+}
+.custom-swatch input[type='color'] {
+  width: 100%;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.custom-swatch span { font-size: 10.5px; font-weight: 600; }
+.custom-swatch code { font-size: 9.5px; color: var(--text-faint); }
+@media (max-width: 800px) {
+  .custom-palette-top { grid-template-columns: 1fr; }
+  .color-wheel { width: 160px; height: 160px; }
+  .custom-harmony-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .custom-swatches { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 .seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 9px; padding: 2px; gap: 2px; }
 .seg button { border: 0; background: none; border-radius: 7px; padding: 5px 10px; font-size: 12.5px; color: var(--text-muted); }
 .seg button.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.08); }

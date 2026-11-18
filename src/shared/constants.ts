@@ -47,6 +47,21 @@ export type Palette = (typeof PALETTES)[number];
 export const APPEARANCE_MODES = ['light', 'dark', 'system'] as const;
 export type AppearanceMode = (typeof APPEARANCE_MODES)[number];
 
+export const COLOR_DERIVATION_MODES = ['monochrome', 'duotone', 'tritone'] as const;
+export type ColorDerivationMode = (typeof COLOR_DERIVATION_MODES)[number];
+
+export const COLOR_HARMONY_MODES = [
+  'monochrome',
+  'shades',
+  'analogous',
+  'complementary',
+  'split-complementary',
+  'triad',
+  'square',
+  'compound',
+] as const;
+export type ColorHarmonyMode = (typeof COLOR_HARMONY_MODES)[number];
+
 export const PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
 export type Priority = (typeof PRIORITIES)[number];
 

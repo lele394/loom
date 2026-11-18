@@ -65,6 +65,7 @@ const APPEARANCE_DEFAULTS: Appearance = {
   palette: 'lavender',
   accent: '',
   density: 'comfortable',
+  customPalette: null,
 };
 
 export class SettingsService {

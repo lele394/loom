@@ -1,4 +1,4 @@
-import type { Appearance } from '../../shared/types';
+import type { Appearance, CustomPalette } from '../../shared/types';
 import { PALETTES, type AppearanceMode, type Palette } from '../../shared/constants';
 
 export const PALETTE_META: { id: Palette; label: string; accent: string; light: string; dark: string }[] = [
@@ -15,6 +15,7 @@ export const DEFAULT_APPEARANCE: Appearance = {
   palette: 'lavender',
   accent: '',
   density: 'comfortable',
+  customPalette: null,
 };
 
 export function resolveMode(mode: AppearanceMode): 'light' | 'dark' {
@@ -71,6 +72,87 @@ export function contrastRatio(a: string, b: string): number {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
+const THEME_VARIABLES = [
+  '--bg',
+  '--surface',
+  '--surface-2',
+  '--surface-3',
+  '--text',
+  '--text-muted',
+  '--text-faint',
+  '--border',
+  '--border-strong',
+  '--accent',
+  '--accent-hover',
+  '--accent-soft',
+  '--accent-contrast',
+  '--ring',
+  '--reader',
+  '--info',
+  '--info-soft',
+  '--scheme-1',
+  '--scheme-2',
+  '--scheme-3',
+  '--scheme-4',
+  '--scheme-5',
+];
+
+function readableColor(color: string, background: string, dark: boolean): string {
+  let adjusted = color;
+  for (let attempt = 0; attempt < 5 && contrastRatio(adjusted, background) < 3.2; attempt++) {
+    adjusted = mix(adjusted, dark ? '#ffffff' : '#000000', 0.22);
+  }
+  return adjusted;
+}
+
+function applyCustomPalette(
+  root: HTMLElement,
+  custom: CustomPalette,
+  palette: (typeof PALETTE_META)[number],
+  dark: boolean,
+): void {
+  const colors = custom.colors.filter((color) => /^#[0-9a-fA-F]{6}$/.test(color));
+  const scheme = colors.length === 5 ? colors : ['#7c5cbf', '#9d83d1', '#5d4697', '#c6b4e6', '#402f73'];
+  const primary = scheme[0]!;
+  const neutralBg = dark ? '#14121b' : palette.light;
+  const neutralSurface = dark ? '#1d1a27' : '#ffffff';
+  const neutralText = dark ? '#ece9f4' : '#302c39';
+  const bg = mix(neutralBg, primary, dark ? 0.05 : 0.035);
+  const surface = mix(neutralSurface, primary, dark ? 0.05 : 0.025);
+  const accent = readableColor(primary, surface, dark);
+  const info = readableColor(scheme[1]!, surface, dark);
+  const accentSoftBase = scheme[2] ?? primary;
+  const ringBase = scheme[3] ?? primary;
+
+  const variables: Record<string, string> = {
+    '--bg': bg,
+    '--surface': surface,
+    '--surface-2': mix(bg, primary, dark ? 0.1 : 0.065),
+    '--surface-3': mix(bg, primary, dark ? 0.17 : 0.11),
+    '--text': mix(neutralText, primary, dark ? 0.06 : 0.055),
+    '--text-muted': mix(mix(neutralText, bg, dark ? 0.34 : 0.42), primary, 0.035),
+    '--text-faint': mix(mix(neutralText, bg, dark ? 0.55 : 0.58), primary, 0.025),
+    '--border': mix(surface, primary, dark ? 0.18 : 0.14),
+    '--border-strong': mix(surface, scheme[4] ?? primary, dark ? 0.3 : 0.24),
+    '--accent': accent,
+    '--accent-hover': dark ? mix(accent, '#ffffff', 0.13) : mix(accent, '#000000', 0.13),
+    '--accent-soft': mix(bg, accentSoftBase, dark ? 0.24 : 0.17),
+    '--accent-contrast': contrastText(accent),
+    '--ring': mix(bg, ringBase, 0.45),
+    '--reader': dark ? mix('#ddd7ea', primary, 0.06) : mix('#3d3747', primary, 0.045),
+    '--info': info,
+    '--info-soft': mix(bg, info, dark ? 0.22 : 0.16),
+    '--scheme-1': scheme[0]!,
+    '--scheme-2': scheme[1]!,
+    '--scheme-3': scheme[2]!,
+    '--scheme-4': scheme[3]!,
+    '--scheme-5': scheme[4]!,
+  };
+  for (const [name, value] of Object.entries(variables)) {
+    root.style.setProperty(name, value);
+  }
+}
+
 export function applyAppearance(appearance: Appearance): void {
   const root = document.documentElement;
   root.dataset.theme = PALETTES.includes(appearance.palette) ? appearance.palette : 'lavender';
@@ -78,23 +160,23 @@ export function applyAppearance(appearance: Appearance): void {
   root.dataset.density = appearance.density;
   const resolved = resolveMode(appearance.mode);
   const palette = PALETTE_META.find((item) => item.id === appearance.palette) ?? PALETTE_META[0]!;
-  const base = appearance.accent || (resolved === 'dark' ? palette.accent : palette.accent);
-  if (appearance.accent) {
-    const background = resolved === 'dark' ? palette.dark : palette.light;
-    root.style.setProperty('--accent', base);
-    root.style.setProperty(
-      '--accent-hover',
-      resolved === 'dark' ? mix(base, '#ffffff', 0.12) : mix(base, '#000000', 0.12),
-    );
-    root.style.setProperty('--accent-soft', mix(background, base, resolved === 'dark' ? 0.24 : 0.16));
-    root.style.setProperty('--accent-contrast', contrastText(base));
-    root.style.setProperty('--ring', mix(background, base, 0.45));
+
+  if (appearance.customPalette) {
+    applyCustomPalette(root, appearance.customPalette, palette, resolved === 'dark');
   } else {
-    root.style.removeProperty('--accent');
-    root.style.removeProperty('--accent-hover');
-    root.style.removeProperty('--accent-soft');
-    root.style.removeProperty('--accent-contrast');
-    root.style.removeProperty('--ring');
+    for (const name of THEME_VARIABLES) root.style.removeProperty(name);
+    const base = appearance.accent || (resolved === 'dark' ? palette.accent : palette.accent);
+    if (appearance.accent) {
+      const background = resolved === 'dark' ? palette.dark : palette.light;
+      root.style.setProperty('--accent', base);
+      root.style.setProperty(
+        '--accent-hover',
+        resolved === 'dark' ? mix(base, '#ffffff', 0.12) : mix(base, '#000000', 0.12),
+      );
+      root.style.setProperty('--accent-soft', mix(background, base, resolved === 'dark' ? 0.24 : 0.16));
+      root.style.setProperty('--accent-contrast', contrastText(base));
+      root.style.setProperty('--ring', mix(background, base, 0.45));
+    }
   }
   try {
     localStorage.setItem('loom-appearance', JSON.stringify(appearance));

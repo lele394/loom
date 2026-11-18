@@ -59,7 +59,7 @@ Data lives in `./data` by default: `loom.db`, content-addressed attachments, bac
 | Search | FTS5 over objects and chunks (including PDF text), filters, snippets; optional embeddings + RRF hybrid |
 | AI | Cited chat over notes/papers (global, project or explicit selection), streaming, save-as-note, extract-tasks, offline fake provider |
 | Data | Markdown/BibTeX/JSONL/attachment exports, verified backups, transactional restore, trash |
-| Theming | Six palettes × light/dark/system, accent override, density, pre-paint theme (no flash) |
+| Theming | Six presets × light/dark/system, accent override, density, custom colour-wheel palette designer with derivation/harmony modes and per-swatch editing, pre-paint theme (no flash) |
 
 ---
 
@@ -203,7 +203,7 @@ If you outgrow SQLite, the repository and `VectorIndex`/`BlobStore`/`JobHandler`
 
 ## Verification
 
-The repository ships with 89 tests covering auth/CSRF, notes and conflict handling, wikilinks/backlinks, tasks and ordering, FTS + chunk search + embeddings, PDF extraction and sniffing, AI streaming/citations, backup/restore, export integrity, timezone/DST and BibTeX.
+The repository ships with 91 tests covering auth/CSRF, notes and conflict handling, wikilinks/backlinks, tasks and ordering, FTS + chunk search + embeddings, PDF extraction and sniffing, AI streaming/citations, backup/restore, export integrity, timezone/DST and BibTeX.
 
 ```bash
 npm run typecheck && npm run check:boundaries && npm test && npm run build

@@ -1,6 +1,8 @@
 import type {
   AiScope,
   CalendarItemType,
+  ColorDerivationMode,
+  ColorHarmonyMode,
   ExperimentStatus,
   InboxKind,
   LinkKind,
@@ -53,11 +55,19 @@ export interface Capabilities {
   };
 }
 
+export interface CustomPalette {
+  baseColors: string[];
+  colors: string[];
+  derivation: ColorDerivationMode;
+  harmony: ColorHarmonyMode;
+}
+
 export interface Appearance {
   mode: 'light' | 'dark' | 'system';
   palette: Palette;
   accent: string;
   density: 'comfortable' | 'compact';
+  customPalette: CustomPalette | null;
 }
 
 export interface Project {

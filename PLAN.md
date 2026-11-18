@@ -175,6 +175,12 @@ Executable checklist for Loom v1. Checked items are implemented and verified (20
   - global Calendar destination aggregates every project with a chronological Upcoming bar
   - month grid supports multi-day events, click-to-create, edit/delete, archived-project read-only state
   - calendar activity recorded in the project timeline; export/backup coverage and API tests
+- [x] **P3.16 Custom palette designer** (extension, 2026-11-18)
+  - colour-wheel input plus monochrome, duo-tone and tri-tone derivations
+  - analogous, complementary, split-complementary, triad, square, compound, shades and monochrome harmonies
+  - five editable scheme swatches with regeneration from the base tone(s)
+  - custom palettes derive app surfaces, text, borders, accent, info and reader tokens while keeping semantic colours
+  - all five scheme colours contribute to the theme; persisted through the appearance API with validation and tests
 - [x] **P3.15 Reading comfort controls** (extension, 2026-11-17)
   - persistent personal-note text scaling in read mode (75–300%) for editor and Markdown preview
   - PDF appearance cog panel with night/invert, default, warm and contrast presets

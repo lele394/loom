@@ -16,6 +16,8 @@ import {
   PDF_METADATA_MODES,
   PDF_ANNOTATION_KINDS,
   CALENDAR_ITEM_TYPES,
+  COLOR_DERIVATION_MODES,
+  COLOR_HARMONY_MODES,
 } from './constants';
 
 const id = z.string().min(3).max(64);
@@ -519,11 +521,19 @@ export const messageExtractTasksSchema = z.object({
 });
 
 // ── Settings ────────────────────────────────────────────────────────────
+const customPaletteSchema = z.object({
+  baseColors: z.array(hexColor).min(1).max(3),
+  colors: z.array(hexColor).length(5),
+  derivation: z.enum(COLOR_DERIVATION_MODES),
+  harmony: z.enum(COLOR_HARMONY_MODES),
+});
+
 export const appearanceUpdateSchema = z.object({
   mode: z.enum(APPEARANCE_MODES).optional(),
   palette: z.enum(PALETTES).optional(),
   accent: z.union([hexColor, z.literal('')]).optional(),
   density: z.enum(['comfortable', 'compact']).optional(),
+  customPalette: customPaletteSchema.nullable().optional(),
 });
 
 export const appSettingsUpdateSchema = z.object({

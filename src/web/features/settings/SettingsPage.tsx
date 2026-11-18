@@ -7,6 +7,7 @@ import { Icon } from '../../shared/icons';
 import { PALETTE_META, contrastRatio, contrastText } from '../../shared/theme';
 import { Empty, ErrorState, Field, Loading, Modal, Tabs, useConfirm, useToast } from '../../shared/ui';
 import { formatBytes, objectRoute, TypeBadge } from '../../shared/components';
+import { CustomPaletteBuilder, createDefaultCustomPalette } from './CustomPaletteBuilder';
 import { OBJECT_TYPES, PDF_METADATA_MODES, type PdfMetadataMode } from '../../../shared/constants';
 import type { BackupRecord, GithubCredentialStatus, JobRecord, ObjectSummary, Project } from '../../../shared/types';
 
@@ -93,6 +94,11 @@ function AppearanceSection() {
   const { meta, updateAppearance } = useSession();
   if (!meta) return null;
   const appearance = meta.appearance;
+  const custom = appearance.customPalette;
+  const presetAccent =
+    appearance.accent ||
+    PALETTE_META.find((item) => item.id === appearance.palette)?.accent ||
+    '#7c5cbf';
   return (
     <div className="stack" style={{ gap: 20 }}>
       <div className="card stack">
@@ -113,8 +119,8 @@ function AppearanceSection() {
           {PALETTE_META.map((palette) => (
             <button
               key={palette.id}
-              className={`swatch ${appearance.palette === palette.id ? 'selected' : ''}`}
-              onClick={() => void updateAppearance({ palette: palette.id })}
+              className={`swatch ${!custom && appearance.palette === palette.id ? 'selected' : ''}`}
+              onClick={() => void updateAppearance({ palette: palette.id, customPalette: null })}
             >
               <div className="preview" style={{ background: palette.light, borderColor: palette.accent }}>
                 <div style={{ height: '100%', width: 8, background: palette.accent, borderRadius: 4, marginLeft: 8 }} />
@@ -122,28 +128,71 @@ function AppearanceSection() {
               {palette.label}
             </button>
           ))}
+          <button
+            className={`swatch ${custom ? 'selected' : ''}`}
+            onClick={() => {
+              if (custom) return;
+              void updateAppearance({
+                customPalette: createDefaultCustomPalette(presetAccent),
+                accent: '',
+              });
+            }}
+          >
+            <div
+              className="preview custom-palette-preview"
+              style={
+                custom
+                  ? {
+                      background: `linear-gradient(135deg, ${custom.colors.join(', ')})`,
+                      borderColor: custom.colors[0],
+                    }
+                  : undefined
+              }
+            >
+              {!custom ? (
+                <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: '#fff', fontSize: 14 }}>
+                  ✺
+                </div>
+              ) : null}
+            </div>
+            Custom
+          </button>
         </div>
-        <p className="small faint">Pastels are used for surfaces and accents; body text stays high-contrast.</p>
+        <p className="small faint">
+          Presets keep the familiar pastel surfaces. Custom schemes derive surfaces and accents from a generated five-colour palette.
+        </p>
       </div>
 
-      <div className="card stack">
-        <h3 style={{ fontSize: 15 }}>Custom accent</h3>
-        <div className="row">
-          <input
-            type="color"
-            value={appearance.accent || PALETTE_META.find((item) => item.id === appearance.palette)?.accent || '#7c5cbf'}
-            onChange={(event) => void updateAppearance({ accent: event.target.value })}
-            style={{ width: 48, height: 34, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)' }}
+      {custom ? (
+        <div className="card stack">
+          <h3 style={{ fontSize: 15 }}>Custom palette designer</h3>
+          <CustomPaletteBuilder
+            value={custom}
+            onChange={(next) => void updateAppearance({ customPalette: next })}
           />
-          <input className="input" style={{ width: 130 }} value={appearance.accent} placeholder="Theme default" onChange={(event) => void updateAppearance({ accent: event.target.value })} />
-          <button className="btn sm" onClick={() => void updateAppearance({ accent: '' })}>Reset</button>
-          <span className={`badge ${contrastRatio(appearance.accent || '#7c5cbf', contrastText(appearance.accent || '#7c5cbf')) < 4.5 ? 'danger' : 'info'}`}>
-            text on accent: {contrastText(appearance.accent || '#7c5cbf') === '#ffffff' ? 'white' : 'ink'} ·{' '}
-            {contrastRatio(appearance.accent || '#7c5cbf', contrastText(appearance.accent || '#7c5cbf')).toFixed(1)}:1
-          </span>
         </div>
-        <p className="small faint">Derived hover, soft and contrast tokens are computed from the accent.</p>
-      </div>
+      ) : null}
+
+      {!custom ? (
+        <div className="card stack">
+          <h3 style={{ fontSize: 15 }}>Custom accent</h3>
+          <div className="row">
+            <input
+              type="color"
+              value={presetAccent}
+              onChange={(event) => void updateAppearance({ accent: event.target.value })}
+              style={{ width: 48, height: 34, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)' }}
+            />
+            <input className="input" style={{ width: 130 }} value={appearance.accent} placeholder="Theme default" onChange={(event) => void updateAppearance({ accent: event.target.value })} />
+            <button className="btn sm" onClick={() => void updateAppearance({ accent: '' })}>Reset</button>
+            <span className={`badge ${contrastRatio(presetAccent, contrastText(presetAccent)) < 4.5 ? 'danger' : 'info'}`}>
+              text on accent: {contrastText(presetAccent) === '#ffffff' ? 'white' : 'ink'} ·{' '}
+              {contrastRatio(presetAccent, contrastText(presetAccent)).toFixed(1)}:1
+            </span>
+          </div>
+          <p className="small faint">Derived hover, soft and contrast tokens are computed from the accent.</p>
+        </div>
+      ) : null}
 
       <div className="card stack">
         <h3 style={{ fontSize: 15 }}>Density</h3>
