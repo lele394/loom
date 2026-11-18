@@ -4,7 +4,7 @@ import { api, download } from '../../shared/api';
 import { useSession } from '../../app/session';
 import { useAsync, formatDate, formatDateTime, relativeTime, todayIso } from '../../shared/hooks';
 import { Icon } from '../../shared/icons';
-import { PALETTE_META, contrastRatio, contrastText } from '../../shared/theme';
+import { applyAppearance, PALETTE_META, contrastRatio, contrastText } from '../../shared/theme';
 import { Empty, ErrorState, Field, Loading, Modal, Tabs, useConfirm, useToast } from '../../shared/ui';
 import { formatBytes, objectRoute, TypeBadge } from '../../shared/components';
 import { CustomPaletteBuilder, createDefaultCustomPalette } from './CustomPaletteBuilder';
@@ -168,6 +168,9 @@ function AppearanceSection() {
           <h3 style={{ fontSize: 15 }}>Custom palette designer</h3>
           <CustomPaletteBuilder
             value={custom}
+            onPreview={(next) =>
+              applyAppearance({ ...appearance, customPalette: next }, { persist: false })
+            }
             onChange={(next) => void updateAppearance({ customPalette: next })}
           />
         </div>

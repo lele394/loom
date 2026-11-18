@@ -153,7 +153,10 @@ function applyCustomPalette(
   }
 }
 
-export function applyAppearance(appearance: Appearance): void {
+export function applyAppearance(
+  appearance: Appearance,
+  options: { persist?: boolean } = {},
+): void {
   const root = document.documentElement;
   root.dataset.theme = PALETTES.includes(appearance.palette) ? appearance.palette : 'lavender';
   root.dataset.mode = resolveMode(appearance.mode);
@@ -178,10 +181,12 @@ export function applyAppearance(appearance: Appearance): void {
       root.style.setProperty('--ring', mix(background, base, 0.45));
     }
   }
-  try {
-    localStorage.setItem('loom-appearance', JSON.stringify(appearance));
-  } catch {
-    // storage may be disabled
+  if (options.persist !== false) {
+    try {
+      localStorage.setItem('loom-appearance', JSON.stringify(appearance));
+    } catch {
+      // storage may be disabled
+    }
   }
 }
 

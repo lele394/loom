@@ -53,14 +53,22 @@ function ensureBaseColors(bases: string[], count: number): string[] {
 export function CustomPaletteBuilder({
   value,
   onChange,
+  onPreview,
 }: {
   value: CustomPalette;
   onChange: (value: CustomPalette) => void;
+  onPreview: (value: CustomPalette) => void;
 }) {
   const [draft, setDraft] = useState<CustomPalette>(value);
   const [dragging, setDragging] = useState(false);
   const wheelRef = useRef<HTMLDivElement>(null);
   const lastSentRef = useRef(JSON.stringify(value));
+  const onPreviewRef = useRef(onPreview);
+  onPreviewRef.current = onPreview;
+
+  useEffect(() => {
+    onPreviewRef.current(draft);
+  }, [draft]);
 
   useEffect(() => {
     const serialized = JSON.stringify(value);
