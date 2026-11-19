@@ -20,6 +20,15 @@ describe('journal and digest', () => {
     const before = await harness.request('GET', `/journal/${today}`);
     expect(before.body.diff.totals.added).toBeGreaterThanOrEqual(1);
     expect(before.body.digest).toBeNull();
+    expect(before.body.note).toBeNull();
+
+    const note = await harness.request('PUT', `/journal/${today}/note`, {
+      noteMarkdown: 'Spent the afternoon reading an untracked textbook chapter.',
+    });
+    expect(note.status).toBe(200);
+    expect(note.body.note.noteMarkdown).toContain('textbook');
+    const withNote = await harness.request('GET', `/journal/${today}`);
+    expect(withNote.body.note.noteMarkdown).toContain('textbook');
 
     await harness.request('POST', '/ai/providers', {
       name: 'Offline demo',
@@ -35,7 +44,14 @@ describe('journal and digest', () => {
     expect(after.body.digest.status).toBe('ready');
     expect(after.body.digest.summaryMarkdown).toContain('## Focus');
     expect(after.body.digest.sourceEventSeq).toBeGreaterThanOrEqual(1);
+    expect(after.body.digest.stale).toBe(false);
     expect(after.body.events.length).toBeGreaterThanOrEqual(1);
+
+    await harness.request('PUT', `/journal/${today}/note`, {
+      noteMarkdown: 'Updated context after the digest was generated.',
+    });
+    const stale = await harness.request('GET', `/journal/${today}`);
+    expect(stale.body.digest.stale).toBe(true);
 
     const regenerated = await harness.request('POST', `/journal/${today}/generate`, { force: true });
     expect(regenerated.status).toBe(202);

@@ -175,6 +175,11 @@ Executable checklist for Loom v1. Checked items are implemented and verified (20
   - global Calendar destination aggregates every project with a chronological Upcoming bar
   - month grid supports multi-day events, click-to-create, edit/delete, archived-project read-only state
   - calendar activity recorded in the project timeline; export/backup coverage and API tests
+- [x] **P3.17 Journal personal notes** (extension, 2026-11-19)
+  - per-user, per-day Markdown notes with autosave and explicit save for untracked work
+  - notes are included as bounded context in the `digest@3` AI prompt, never as instructions
+  - digest staleness tracks note edits via `source_note_updated_at`; digest-generation events no longer self-mark the digest stale
+  - journal note persistence, API/export/backup coverage and tests
 - [x] **P3.16 Custom palette designer** (extension, 2026-11-18)
   - colour-wheel input plus monochrome, duo-tone and tri-tone derivations
   - analogous, complementary, split-complementary, triad, square, compound, shades and monochrome harmonies

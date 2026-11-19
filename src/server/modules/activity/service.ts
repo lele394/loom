@@ -284,7 +284,8 @@ export class ActivityService {
     const { start, end } = zonedDayRange(date, timezone);
     const row = this.db
       .prepare(
-        'SELECT MAX(seq) AS seq FROM activity_events WHERE occurred_at >= ? AND occurred_at < ?',
+        `SELECT MAX(seq) AS seq FROM activity_events
+         WHERE occurred_at >= ? AND occurred_at < ? AND action <> 'journal.digest_generated'`,
       )
       .get(start.toISOString(), end.toISOString()) as { seq: number | null };
     return row.seq ?? 0;

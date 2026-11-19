@@ -1,7 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import type { Ctx } from '../../ctx';
 import { parse } from '../errors';
-import { activityQuerySchema, digestDateSchema, journalGenerateSchema } from '../../../shared/schemas';
+import {
+  activityQuerySchema,
+  digestDateSchema,
+  journalGenerateSchema,
+  journalNoteUpdateSchema,
+} from '../../../shared/schemas';
 import { isValidDateString, todayIn, zonedDayRange } from '../../core/time';
 import { AppError } from '../../core/errors';
 
@@ -36,7 +41,21 @@ export async function activityRoutes(app: FastifyInstance, ctx: Ctx): Promise<vo
       to: new Date(end.getTime() - 1).toISOString(),
       limit: 200,
     });
-    return reply.send({ ...result, events });
+    return reply.send({
+      ...result,
+      events,
+      note: ctx.services.journal.getNote(request.user.id, date),
+    });
+  });
+
+  app.put('/journal/:date/note', async (request, reply) => {
+    if (!request.user) throw new Error('unauthenticated');
+    const { date } = request.params as { date: string };
+    parse(digestDateSchema, date);
+    const input = parse(journalNoteUpdateSchema, request.body);
+    return reply.send({
+      note: ctx.services.journal.saveNote(request.user.id, date, input.noteMarkdown),
+    });
   });
 
   app.post('/journal/:date/generate', async (request, reply) => {

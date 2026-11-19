@@ -55,7 +55,7 @@ Data lives in `./data` by default: `loom.db`, content-addressed attachments, bac
 | Questions | Open → investigating → answered, answer notes linked automatically |
 | Inbox | Global capture, triage into any object type, archive |
 | Activity | Append-only event log, per-object history, deterministic daily diff |
-| Journal | Deterministic diff first; optional AI interpretation; next steps → tasks |
+| Journal | Deterministic diff first; per-day personal notes for untracked work; optional AI interpretation with those notes as context; next steps → tasks |
 | Search | FTS5 over objects and chunks (including PDF text), filters, snippets; optional embeddings + RRF hybrid |
 | AI | Cited chat over notes/papers (global, project or explicit selection), streaming, save-as-note, extract-tasks, offline fake provider |
 | Data | Markdown/BibTeX/JSONL/attachment exports, verified backups, transactional restore, trash |
@@ -187,7 +187,7 @@ data/attachments/<sha256>          data/backups/*.zip
 - Every mutation writes its activity event and follow-up job in the same transaction.
 - No Redis/Celery; the database queue is durable and retried with backoff.
 - AI is a port with two adapters (OpenAI-compatible, deterministic fake); RAG uses FTS5 + optional vector scan fused with RRF.
-- The journal is diff-first: the LLM sees only the deterministic diff, never the database.
+- The journal is diff-first: the LLM sees only the deterministic diff plus the author’s explicit personal note for that day, never the database.
 
 See `design_docs/02-architecture.md`, `03-domain-model.md`, `04-data-model.md` and the ADRs.
 

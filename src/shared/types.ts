@@ -429,6 +429,12 @@ export interface DailyDiff {
   eventSeqRange: [number, number] | null;
 }
 
+export interface JournalNote {
+  date: string;
+  noteMarkdown: string;
+  updatedAt: string;
+}
+
 export interface Digest {
   id: string;
   date: string;

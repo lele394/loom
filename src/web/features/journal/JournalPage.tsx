@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../shared/api';
 import { useAsync, formatDate, shiftDate, timeOf, todayIso } from '../../shared/hooks';
@@ -6,12 +6,13 @@ import { Icon } from '../../shared/icons';
 import { Markdown } from '../../shared/markdown';
 import { objectRoute, typeIcon } from '../../shared/components';
 import { Empty, ErrorState, Field, Loading, Modal, useToast } from '../../shared/ui';
-import type { ActivityEvent, DailyDiff, Digest, Project } from '../../../shared/types';
+import type { ActivityEvent, DailyDiff, Digest, JournalNote, Project } from '../../../shared/types';
 
 interface JournalResponse {
   digest: Digest | null;
   diff: DailyDiff;
   events: ActivityEvent[];
+  note: JournalNote | null;
 }
 
 function nextSteps(summary: string | null): string[] {
@@ -47,12 +48,69 @@ export function JournalPage() {
   const [creating, setCreating] = useState(false);
   const [revisionsOpen, setRevisionsOpen] = useState(false);
   const [revisions, setRevisions] = useState<{ id: string; summaryMarkdown: string; model: string | null; createdAt: string }[]>([]);
+  const [noteText, setNoteText] = useState('');
+  const [noteSaved, setNoteSaved] = useState('');
+  const [noteStatus, setNoteStatus] = useState<'saved' | 'dirty' | 'saving' | 'error'>('saved');
+  const noteTextRef = useRef('');
+  const noteSavedRef = useRef('');
+  const loadedNoteDateRef = useRef<string | null>(null);
+  noteTextRef.current = noteText;
+  noteSavedRef.current = noteSaved;
 
   useEffect(() => {
     if (!projectId && projects.data?.length) setProjectId(projects.data[0]!.id);
   }, [projects.data, projectId]);
 
+  useEffect(() => {
+    if (!state.data) return;
+    const text = state.data.note?.noteMarkdown ?? '';
+    if (loadedNoteDateRef.current !== date) {
+      loadedNoteDateRef.current = date;
+      setNoteText(text);
+      setNoteSaved(text);
+      setNoteStatus('saved');
+      return;
+    }
+    if (noteTextRef.current === noteSavedRef.current && text !== noteSavedRef.current) {
+      setNoteText(text);
+      setNoteSaved(text);
+      setNoteStatus('saved');
+    }
+  }, [date, state.data]);
+
+  const saveJournalNote = async (value: string): Promise<boolean> => {
+    setNoteStatus('saving');
+    try {
+      const result = await api.put<{ note: JournalNote | null }>(`/journal/${date}/note`, {
+        noteMarkdown: value,
+      });
+      setNoteSaved(value);
+      setNoteStatus(noteTextRef.current === value ? 'saved' : 'dirty');
+      if (state.data) state.setData({ ...state.data, note: result.note });
+      return true;
+    } catch (error) {
+      setNoteStatus('error');
+      toast((error as Error).message, 'error');
+      return false;
+    }
+  };
+
+  useEffect(() => {
+    if (noteText === noteSaved) {
+      setNoteStatus('saved');
+      return;
+    }
+    setNoteStatus('dirty');
+    const timer = window.setTimeout(() => void saveJournalNote(noteText), 1200);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date, noteText, noteSaved]);
+
   const generate = async (force: boolean) => {
+    if (noteText !== noteSaved) {
+      const saved = await saveJournalNote(noteText);
+      if (!saved) return;
+    }
     setGenerating(true);
     try {
       const { jobId } = await api.post<{ jobId: string | null }>(`/journal/${date}/generate`, { force });
@@ -90,6 +148,14 @@ export function JournalPage() {
   if (!state.data) return null;
   const { digest, diff, events } = state.data;
   const stepsToCreate = nextSteps(digest?.summaryMarkdown ?? null);
+  const noteLabel =
+    noteStatus === 'saved'
+      ? 'Saved'
+      : noteStatus === 'saving'
+        ? 'Saving…'
+        : noteStatus === 'error'
+          ? 'Save failed'
+          : 'Unsaved';
 
   const openRevisions = async () => {
     setRevisionsOpen(true);
@@ -211,6 +277,41 @@ export function JournalPage() {
         </div>
 
         <div className="stack">
+          <div className="card stack sm">
+            <div className="row between">
+              <strong className="small">Personal note</strong>
+              <span
+                className="tiny"
+                style={{ color: noteStatus === 'error' ? 'var(--danger)' : 'var(--text-faint)' }}
+              >
+                {noteLabel}
+              </span>
+            </div>
+            <textarea
+              className="textarea"
+              style={{ minHeight: 140 }}
+              value={noteText}
+              onChange={(event) => setNoteText(event.target.value)}
+              placeholder="What did you work on that Loom could not track? Reading, meetings, thinking, writing elsewhere…"
+              onKeyDown={(event) => {
+                if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                  event.preventDefault();
+                  void saveJournalNote(noteText);
+                }
+              }}
+            />
+            <div className="row between">
+              <span className="tiny faint">Included as context for the AI interpretation.</span>
+              <button
+                className="btn sm"
+                disabled={noteStatus === 'saving' || noteText === noteSaved}
+                onClick={() => void saveJournalNote(noteText)}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+
           <div className="card">
             <div className="row between" style={{ marginBottom: 8 }}>
               <strong className="small">AI interpretation</strong>

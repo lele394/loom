@@ -66,6 +66,7 @@ const RESTORE_TABLES = [
   'chunks',
   'activity_events',
   'daily_digests',
+  'journal_notes',
   'digest_revisions',
   'ai_providers',
   'conversations',

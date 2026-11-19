@@ -558,6 +558,9 @@ export const githubTokenSchema = z.object({
 export const backupCreateSchema = z.object({ kind: z.enum(['manual']).optional().default('manual') });
 export const backupRestoreFieldsSchema = z.object({ confirm: z.literal('RESTORE') });
 export const journalGenerateSchema = z.object({ force: z.boolean().optional().default(false) });
+export const journalNoteUpdateSchema = z.object({
+  noteMarkdown: z.string().max(50_000).default(''),
+});
 export const digestDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 export const activityQuerySchema = z.object({
   projectId: id.optional(),

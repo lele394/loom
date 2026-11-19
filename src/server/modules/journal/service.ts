@@ -9,7 +9,7 @@ import { parseJson } from '../../core/text';
 import { isValidDateString, todayIn } from '../../core/time';
 import { createProvider } from '../../ai';
 import { DIGEST_PROMPT_VERSION, buildDigestMessages } from '../../ai/prompts';
-import type { DailyDiff, Digest } from '../../../shared/types';
+import type { DailyDiff, Digest, JournalNote } from '../../../shared/types';
 
 interface DigestRow {
   id: string;
@@ -23,6 +23,7 @@ interface DigestRow {
   generated_at: string | null;
   regenerated_count: number;
   source_event_seq: number | null;
+  source_note_updated_at: string | null;
 }
 
 function mapDigest(row: DigestRow, diffOverride?: DailyDiff): Digest {
@@ -76,8 +77,38 @@ export class JournalService {
     if (!row) return { digest: null, diff };
     const latestSeq = this.activity.maxSeqInRange(day, user.timezone);
     const digest = mapDigest(row, diff);
-    digest.stale = (row.source_event_seq ?? 0) < latestSeq;
+    const note = this.getNote(userId, day);
+    digest.stale =
+      (row.source_event_seq ?? 0) < latestSeq ||
+      (row.source_note_updated_at ?? null) !== (note?.updatedAt ?? null);
     return { digest, diff };
+  }
+
+  getNote(userId: string, date: string): JournalNote | null {
+    this.user(userId);
+    if (!isValidDateString(date)) throw new AppError('bad_request', 'Invalid date.');
+    const row = this.db
+      .prepare('SELECT date, note_md, updated_at FROM journal_notes WHERE user_id = ? AND date = ?')
+      .get(userId, date) as { date: string; note_md: string; updated_at: string } | undefined;
+    return row ? { date: row.date, noteMarkdown: row.note_md, updatedAt: row.updated_at } : null;
+  }
+
+  saveNote(userId: string, date: string, noteMarkdown: string): JournalNote | null {
+    this.user(userId);
+    if (!isValidDateString(date)) throw new AppError('bad_request', 'Invalid date.');
+    const now = this.clock.iso();
+    if (!noteMarkdown.trim()) {
+      this.db.prepare('DELETE FROM journal_notes WHERE user_id = ? AND date = ?').run(userId, date);
+      return null;
+    }
+    this.db
+      .prepare(
+        `INSERT INTO journal_notes (user_id, date, note_md, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(user_id, date) DO UPDATE SET note_md = excluded.note_md, updated_at = excluded.updated_at`,
+      )
+      .run(userId, date, noteMarkdown, now, now);
+    return this.getNote(userId, date);
   }
 
   list(userId: string, from?: string, to?: string, limit = 60): Digest[] {
@@ -99,8 +130,11 @@ export class JournalService {
     return rows.map((row) => {
       const user = this.user(userId);
       const latestSeq = this.activity.maxSeqInRange(row.date, user.timezone);
+      const note = this.getNote(userId, row.date);
       const digest = mapDigest(row);
-      digest.stale = (row.source_event_seq ?? 0) < latestSeq;
+      digest.stale =
+        (row.source_event_seq ?? 0) < latestSeq ||
+        (row.source_note_updated_at ?? null) !== (note?.updatedAt ?? null);
       return digest;
     });
   }
@@ -131,11 +165,19 @@ export class JournalService {
     const user = this.user(userId);
     const diff = this.activity.diff(date, user.timezone);
     const latestSeq = this.activity.maxSeqInRange(date, user.timezone);
+    const note = this.getNote(userId, date);
+    const noteUpdatedAt = note?.updatedAt ?? null;
     const existing = this.db
       .prepare('SELECT * FROM daily_digests WHERE user_id = ? AND date = ?')
       .get(userId, date) as DigestRow | undefined;
 
-    if (existing && !force && existing.status === 'ready' && (existing.source_event_seq ?? 0) >= latestSeq) {
+    if (
+      existing &&
+      !force &&
+      existing.status === 'ready' &&
+      (existing.source_event_seq ?? 0) >= latestSeq &&
+      (existing.source_note_updated_at ?? null) === noteUpdatedAt
+    ) {
       return mapDigest(existing, diff);
     }
 
@@ -147,7 +189,7 @@ export class JournalService {
 
     if (config && (config.chatModel || config.kind === 'fake')) {
       const provider = createProvider(config);
-      const prompt = buildDigestMessages(diff);
+      const prompt = buildDigestMessages(diff, undefined, note?.noteMarkdown ?? '');
       try {
         let text = '';
         for await (const chunk of provider.chat({
@@ -194,8 +236,8 @@ export class JournalService {
       }
       this.db
         .prepare(
-          `INSERT INTO daily_digests (id, user_id, date, timezone, diff_json, summary_md, model, status, generated_at, regenerated_count, source_event_seq)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO daily_digests (id, user_id, date, timezone, diff_json, summary_md, model, status, generated_at, regenerated_count, source_event_seq, source_note_updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(user_id, date) DO UPDATE SET
              diff_json = excluded.diff_json,
              summary_md = excluded.summary_md,
@@ -203,7 +245,8 @@ export class JournalService {
              status = excluded.status,
              generated_at = excluded.generated_at,
              regenerated_count = excluded.regenerated_count,
-             source_event_seq = excluded.source_event_seq`,
+             source_event_seq = excluded.source_event_seq,
+             source_note_updated_at = excluded.source_note_updated_at`,
         )
         .run(
           id,
@@ -217,6 +260,7 @@ export class JournalService {
           now,
           regenerated,
           latestSeq,
+          noteUpdatedAt,
         );
       if (!failed) {
         this.activity.record({

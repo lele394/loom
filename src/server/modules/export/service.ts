@@ -109,6 +109,7 @@ export class ExportService {
       { name: 'data/conversations.jsonl', data: jsonl(conversations) },
       { name: 'data/messages.jsonl', data: jsonl(messages) },
       { name: 'data/daily_digests.jsonl', data: jsonl(digests) },
+      { name: 'data/journal_notes.jsonl', data: jsonl(this.db.prepare('SELECT * FROM journal_notes WHERE user_id = ?').all(userId)) },
       { name: 'data/digest_revisions.jsonl', data: jsonl(revisions) },
       { name: 'data/settings.json', data: Buffer.from(JSON.stringify(this.appSettings(), null, 2), 'utf8') },
       { name: 'data/user_settings.jsonl', data: jsonl(this.db.prepare('SELECT * FROM user_settings').all()) },
