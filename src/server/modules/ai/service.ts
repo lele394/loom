@@ -230,7 +230,7 @@ export class AiService {
 
   messages(conversationId: string): ChatMessage[] {
     const rows = this.db
-      .prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC, id ASC')
+      .prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY rowid ASC')
       .all(conversationId) as MessageRow[];
     return rows.map(mapMessage);
   }
@@ -277,7 +277,7 @@ export class AiService {
 
     const history = this.db
       .prepare(
-        'SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC, id DESC LIMIT 10',
+        'SELECT * FROM messages WHERE conversation_id = ? ORDER BY rowid DESC LIMIT 10',
       )
       .all(conversationId) as MessageRow[];
     history.reverse();
