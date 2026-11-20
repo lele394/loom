@@ -1875,7 +1875,14 @@ mark { background: var(--warning-soft); color: var(--text); padding: 0 2px; bord
 .pdf-text-layer span[role='img'] { user-select: none; cursor: default; }
 .pdf-page.tool-select .pdf-text-layer :is(span, br),
 .pdf-page.tool-text .pdf-text-layer :is(span, br) { cursor: text; }
-.pdf-text-layer ::selection { background: color-mix(in srgb, var(--accent) 38%, transparent); }
+.pdf-text-layer ::-moz-selection {
+  background: color-mix(in srgb, var(--accent) 38%, transparent);
+  color: transparent;
+}
+.pdf-text-layer ::selection {
+  background: color-mix(in srgb, var(--accent) 38%, transparent);
+  color: transparent;
+}
 .pdf-annotation-layer { position: absolute; inset: 0; overflow: visible; z-index: 2; pointer-events: none; }
 .pdf-draw-layer { position: absolute; inset: 0; touch-action: none; z-index: 4; }
 .pdf-draw-layer.tool-highlight, .pdf-draw-layer.tool-ink { cursor: crosshair; }
