@@ -202,11 +202,12 @@ export function buildOcrMessages(images: string[]): { system: string; user: AiCo
   };
 }
 
-export const SUMMARY_PROMPT_VERSION = 'summary@1';
+export const SUMMARY_PROMPT_VERSION = 'summary@2';
 
 const SUMMARY_RULES = `You are a research assistant inside Loom. Summarize the supplied research source for the researcher who owns this notebook.
 Use ONLY facts present in the source. Never invent results, numbers, authors, citations or limitations.
-Write Markdown with exactly these sections:
+First line: one very brief title for this summary (at most 70 characters, plain text, no Markdown heading).
+Then a blank line, then Markdown with exactly these sections:
 ## Summary
 Two or three sentences.
 ## Key contributions

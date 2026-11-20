@@ -51,7 +51,7 @@ export class FakeProvider implements AiProvider {
       (message) => message.role === 'system' && messageText(message.content).includes('Summarize the supplied research source'),
     );
     if (summarySystem) {
-      const answer = `## Summary\nA deterministic offline summary of the supplied source.\n\n## Key contributions\n- The source demonstrates a measurable research result.\n\n## Methods\n- The fake provider cannot inspect the actual methods in depth.\n\n## Results\n- Configure a real provider for concrete findings and numbers.\n\n## Limitations\n- This is offline demo text.\n\n## Relevance\n- Useful as a placeholder while validating the workflow.`;
+      const answer = `Energy-efficiency analysis in HPC\n\n## Summary\nA deterministic offline summary of the supplied source.\n\n## Key contributions\n- The source demonstrates a measurable research result.\n\n## Methods\n- The fake provider cannot inspect the actual methods in depth.\n\n## Results\n- Configure a real provider for concrete findings and numbers.\n\n## Limitations\n- This is offline demo text.\n\n## Relevance\n- Useful as a placeholder while validating the workflow.`;
       for (const word of answer.split(/(\s+)/)) {
         if (word) yield { type: 'text', text: word };
       }

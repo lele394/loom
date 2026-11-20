@@ -19,6 +19,26 @@ import type { PdfMetadataMode } from '../../../shared/constants';
 import type { Reference, SummaryVersion, SummaryVersionSummary } from '../../../shared/types';
 import { LiteratureService } from './service';
 
+function splitSummaryTitle(raw: string): { title: string; summary: string } {
+  const text = raw.trim();
+  const lines = text.split(/\r?\n/);
+  const first = (lines[0] ?? '').trim();
+  if (!first) return { title: '', summary: text };
+  if (/^#{2,6}\s+/.test(first) || /^[-*]\s+/.test(first)) {
+    return { title: '', summary: text };
+  }
+  const remainder = lines.slice(1).join('\n').trim();
+  const h1 = /^#\s+(.+)$/.exec(first);
+  const candidate = (h1?.[1] ?? first).replace(/^\*\*|\*\*$/g, '').trim();
+  if (!candidate || candidate.length > 120 || !remainder.startsWith('##')) {
+    return { title: '', summary: text };
+  }
+  return {
+    title: candidate.slice(0, 250),
+    summary: remainder,
+  };
+}
+
 export class LiteratureSummaryService {
   constructor(
     private readonly db: Db,
@@ -176,6 +196,8 @@ export class LiteratureSummaryService {
     }
     summary = summary.trim();
     if (!summary) throw new AppError('provider_bad_response', 'The model returned an empty summary.');
+    const parsedSummary = splitSummaryTitle(summary);
+    summary = parsedSummary.summary;
 
     const model = `${config.chatModel || config.kind} (${SUMMARY_PROMPT_VERSION})`;
     const now = this.clock.iso();
@@ -202,11 +224,12 @@ export class LiteratureSummaryService {
         .prepare(
           `INSERT INTO reference_summary_versions
              (id, reference_id, title, summary_md, prompt, model, mode, instructions, created_by, created_at)
-           VALUES (?, ?, '', ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           newId('sver'),
           referenceId,
+          parsedSummary.title,
           summary,
           promptText,
           model,
@@ -309,6 +332,32 @@ export class LiteratureSummaryService {
       charCount: version.charCount,
       createdAt: version.createdAt,
     };
+  }
+
+  deleteVersion(versionId: string): { ok: true; clearedCurrent: boolean } {
+    const version = this.getVersion(versionId);
+    const literature = this.db
+      .prepare('SELECT ai_summary, ai_summary_at FROM literature WHERE id = ?')
+      .get(version.referenceId) as
+      | { ai_summary: string | null; ai_summary_at: string | null }
+      | undefined;
+    const clearedCurrent =
+      literature?.ai_summary === version.summaryMarkdown &&
+      literature.ai_summary_at === version.createdAt;
+    const tx = this.db.transaction(() => {
+      this.db.prepare('DELETE FROM reference_summary_versions WHERE id = ?').run(versionId);
+      if (clearedCurrent) {
+        this.db
+          .prepare(
+            `UPDATE literature
+             SET ai_summary = '', ai_summary_model = NULL, ai_summary_at = NULL
+             WHERE id = ?`,
+          )
+          .run(version.referenceId);
+      }
+    });
+    tx();
+    return { ok: true, clearedCurrent };
   }
 
   private primaryUserId(): string {

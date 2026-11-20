@@ -234,7 +234,7 @@ describe('attachments and literature', () => {
     expect(updated.body.aiSummary).toContain('## Summary');
     expect(updated.body.notes).toBe('My private note, not the summary.');
     expect(updated.body.aiSummaryInstructions).toBe('Focus on the method.');
-    expect(updated.body.aiSummaryModel).toContain('summary@1');
+    expect(updated.body.aiSummaryModel).toContain('summary@2');
 
     const versions = await harness.request(
       'GET',
@@ -242,8 +242,8 @@ describe('attachments and literature', () => {
     );
     expect(versions.status).toBe(200);
     expect(versions.body.versions).toHaveLength(1);
-    expect(versions.body.versions[0].title).toBe('');
-    expect(versions.body.versions[0].model).toContain('summary@1');
+    expect(versions.body.versions[0].title).toBe('Energy-efficiency analysis in HPC');
+    expect(versions.body.versions[0].model).toContain('summary@2');
 
     const version = await harness.request(
       'GET',
@@ -253,6 +253,7 @@ describe('attachments and literature', () => {
     expect(version.body.summaryMarkdown).toContain('## Summary');
     expect(version.body.prompt).toContain('You are a research assistant');
     expect(version.body.prompt).toContain('Focus on the method.');
+    expect(version.body.instructions).toBe('Focus on the method.');
 
     const titled = await harness.request(
       'PATCH',
@@ -268,6 +269,20 @@ describe('attachments and literature', () => {
       { title: 'x'.repeat(251) },
     );
     expect(tooLong.status).toBe(400);
+
+    const deleted = await harness.request(
+      'DELETE',
+      `/summary-versions/${versions.body.versions[0].id}`,
+    );
+    expect(deleted.status).toBe(200);
+    expect(deleted.body.clearedCurrent).toBe(true);
+    const cleared = await harness.request('GET', `/references/${reference.body.id}`);
+    expect(cleared.body.aiSummary).toBe('');
+    const afterDelete = await harness.request(
+      'GET',
+      `/references/${reference.body.id}/summary-versions`,
+    );
+    expect(afterDelete.body.versions).toHaveLength(0);
   });
 
   it('stores, updates and removes PDF annotations', async () => {

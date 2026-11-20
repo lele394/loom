@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { api } from '../../shared/api';
 import { PDF_METADATA_MODES, type PdfMetadataMode } from '../../../shared/constants';
 import type { Reference, SummaryVersion, SummaryVersionSummary } from '../../../shared/types';
-import { Field, Modal, Spinner, useToast } from '../../shared/ui';
+import { Field, Modal, Spinner, useConfirm, useToast } from '../../shared/ui';
 import { Icon } from '../../shared/icons';
 import { Markdown } from '../../shared/markdown';
 import { formatDateTime, relativeTime } from '../../shared/hooks';
@@ -86,6 +86,7 @@ export function AiSummaryPanel({
   variant?: 'card' | 'reader';
 }) {
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [mode, setMode] = useState<PdfMetadataMode>('ocr');
   const [instructions, setInstructions] = useState(reference.aiSummaryInstructions);
   const [busy, setBusy] = useState(false);
@@ -101,6 +102,7 @@ export function AiSummaryPanel({
   const [versionLoading, setVersionLoading] = useState(false);
   const [versionTitle, setVersionTitle] = useState('');
   const [versionTitleSaving, setVersionTitleSaving] = useState(false);
+  const [versionDeleting, setVersionDeleting] = useState(false);
   const loadedId = useRef(reference.id);
 
   useEffect(() => {
@@ -172,6 +174,36 @@ export function AiSummaryPanel({
       toast((caught as Error).message, 'error');
     } finally {
       setVersionTitleSaving(false);
+    }
+  };
+
+  const deleteSelectedVersion = async () => {
+    if (!selectedVersion) return;
+    const ok = await confirm({
+      title: 'Delete summary version?',
+      message: selectedVersion.title
+        ? `“${selectedVersion.title}” will be removed from the summary history.`
+        : 'This summary snapshot will be removed from the history.',
+      confirmLabel: 'Delete summary',
+      danger: true,
+    });
+    if (!ok) return;
+    setVersionDeleting(true);
+    try {
+      const result = await api.del<{ ok: true; clearedCurrent: boolean }>(
+        `/summary-versions/${selectedVersion.id}`,
+      );
+      setSelectedVersion(null);
+      await loadVersions();
+      if (result.clearedCurrent) {
+        const updated = await api.get<Reference>(`/references/${reference.id}`);
+        onUpdated(updated);
+      }
+      toast('Summary version deleted', 'success');
+    } catch (caught) {
+      toast((caught as Error).message, 'error');
+    } finally {
+      setVersionDeleting(false);
     }
   };
 
@@ -260,6 +292,9 @@ export function AiSummaryPanel({
   };
 
   if (variant === 'reader') {
+    const currentVersion = versions.find(
+      (version) => version.createdAt === reference.aiSummaryAt,
+    );
     return (
       <div
         className="read-summary"
@@ -364,6 +399,9 @@ export function AiSummaryPanel({
 
             {reference.aiSummary ? (
               <div className="read-summary-body">
+                {currentVersion?.title ? (
+                  <div className="read-summary-heading">{currentVersion.title}</div>
+                ) : null}
                 <Markdown text={reference.aiSummary} />
               </div>
             ) : (
@@ -383,9 +421,18 @@ export function AiSummaryPanel({
           <div className="read-summary-body summary-versions-body">
             {selectedVersion ? (
               <div className="summary-version-detail">
-                <button className="btn ghost sm" onClick={() => setSelectedVersion(null)}>
-                  <Icon name="chevron-left" size={13} /> All versions
-                </button>
+                <div className="row between">
+                  <button className="btn ghost sm" onClick={() => setSelectedVersion(null)}>
+                    <Icon name="chevron-left" size={13} /> All versions
+                  </button>
+                  <button
+                    className="btn danger sm"
+                    disabled={versionDeleting}
+                    onClick={() => void deleteSelectedVersion()}
+                  >
+                    {versionDeleting ? 'Deleting…' : 'Delete summary'}
+                  </button>
+                </div>
                 <div className="summary-version-title-row">
                   <input
                     className="input"
@@ -418,10 +465,12 @@ export function AiSummaryPanel({
                   </span>
                   <span className="tiny faint">{versionTitle.length}/250</span>
                 </div>
-                <details className="summary-prompt-details">
-                  <summary>Prompt used</summary>
-                  <pre className="summary-prompt">{selectedVersion.prompt || '(not recorded)'}</pre>
-                </details>
+                <div className="summary-version-instructions">
+                  <div className="tiny faint">Instructions</div>
+                  <div className="small">
+                    {selectedVersion.instructions || 'No extra instructions were used.'}
+                  </div>
+                </div>
                 <div className="summary-version-summary">
                   <Markdown text={selectedVersion.summaryMarkdown} />
                 </div>

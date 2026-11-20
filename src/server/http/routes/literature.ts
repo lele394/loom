@@ -306,6 +306,12 @@ export async function literatureRoutes(app: FastifyInstance, ctx: Ctx): Promise<
     return reply.send(ctx.services.literatureSummary.updateVersionTitle(id, input.title));
   });
 
+  app.delete('/summary-versions/:id', async (request, reply) => {
+    if (!request.user) throw new Error('unauthenticated');
+    const { id } = request.params as { id: string };
+    return reply.send(ctx.services.literatureSummary.deleteVersion(id));
+  });
+
   app.post('/references/:id/enrich', async (request, reply) => {
     if (!request.user) throw new Error('unauthenticated');
     const { id } = request.params as { id: string };
