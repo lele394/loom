@@ -57,7 +57,7 @@ Data lives in `./data` by default: `loom.db`, content-addressed attachments, bac
 | Activity | Append-only event log, per-object history, deterministic daily diff |
 | Journal | Deterministic diff first; per-day personal notes for untracked work; optional AI interpretation with those notes as context; next steps → tasks |
 | Search | FTS5 over objects and chunks (including PDF text), filters, snippets; optional embeddings + RRF hybrid |
-| AI | Cited chat over notes/papers (global, project or explicit selection), streaming, save-as-note, extract-tasks, offline fake provider |
+| AI | Cited chat over notes/papers (global, project or explicit selection), auto-growing composer, copy actions, searchable/renamable history, streaming with stop, save-as-note, extract-tasks |
 | Data | Markdown/BibTeX/JSONL/attachment exports, verified backups, transactional restore, trash |
 | Theming | Six presets × light/dark/system, accent override, density, custom colour-wheel palette designer with derivation/harmony modes and per-swatch editing, pre-paint theme (no flash) |
 

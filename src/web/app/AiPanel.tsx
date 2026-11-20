@@ -4,18 +4,18 @@ import type { ChatMessage, Conversation, Project } from '../../shared/types';
 import { api, streamChat, type StreamEvent } from '../shared/api';
 import { useAi } from '../shared/aiContext';
 import { useSession } from './session';
-import { useAsync, relativeTime } from '../shared/hooks';
+import { useAsync } from '../shared/hooks';
 import { Icon } from '../shared/icons';
 import { Markdown } from '../shared/markdown';
-import { Modal, Spinner, useConfirm, useToast } from '../shared/ui';
+import { Modal, Spinner, useToast } from '../shared/ui';
 import { ObjectPicker, SourceChips, objectRoute } from '../shared/components';
+import { ChatComposer, ConversationHistory, CopyButton } from '../shared/chat';
 
 export function AiPanel() {
   const navigate = useNavigate();
   const ai = useAi();
   const { meta, refresh } = useSession();
   const { toast } = useToast();
-  const confirm = useConfirm();
   const projects = useAsync(() => api.get<{ projects: Project[] }>('/projects').then((data) => data.projects), []);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -243,6 +243,17 @@ export function AiPanel() {
     }
   };
 
+  const deleteConversation = async (id: string) => {
+    await api.del(`/ai/conversations/${id}`);
+    if (conversationId === id) newConversation();
+    await loadConversations();
+  };
+
+  const renameConversation = async (id: string, title: string) => {
+    await api.patch(`/ai/conversations/${id}`, { title });
+    await loadConversations();
+  };
+
   return (
     <aside className="ai-dock" aria-label="AI assistant">
       <div className="ai-head">
@@ -351,13 +362,15 @@ export function AiPanel() {
                 ) : message.role === 'assistant' && message.content ? (
                   <span className="tiny faint">No sources cited — treat this as ungrounded.</span>
                 ) : null}
-                {message.role === 'assistant' && message.id.startsWith('msg_') ? (
-                  <div className="msg-actions">
-                    <button className="btn sm" onClick={() => void navigator.clipboard.writeText(message.content)}>Copy</button>
-                    <button className="btn sm" onClick={() => void saveAsNote(message)}>Save as note</button>
-                    <button className="btn sm" onClick={() => void extractTasks(message)}>Extract tasks</button>
-                  </div>
-                ) : null}
+                <div className="msg-actions">
+                  <CopyButton text={message.content} />
+                  {message.role === 'assistant' && message.id.startsWith('msg_') ? (
+                    <>
+                      <button className="btn ghost sm" onClick={() => void saveAsNote(message)}>Save as note</button>
+                      <button className="btn ghost sm" onClick={() => void extractTasks(message)}>Extract tasks</button>
+                    </>
+                  ) : null}
+                </div>
               </div>
             ))}
             {streaming ? (
@@ -365,9 +378,6 @@ export function AiPanel() {
                 <div className="who"><Icon name="sparkles" size={12} /> Assistant</div>
                 <div className="bubble">
                   {streamText ? <Markdown text={streamText} /> : <span className="typing"><i /><i /><i /></span>}
-                </div>
-                <div className="row">
-                  <button className="btn sm" onClick={() => abortRef.current?.abort()}>Stop</button>
                 </div>
               </div>
             ) : null}
@@ -385,29 +395,22 @@ export function AiPanel() {
           </div>
 
           <div className="ai-compose">
-            <div className="ai-context-chips">
-              {usage ? <span className="tiny faint">~{usage.inputTokens + usage.outputTokens} tokens</span> : null}
-              {ai.context.length ? <span className="tiny faint">· {ai.context.length} source(s) pinned</span> : null}
-            </div>
-            <textarea
-              className="textarea"
-              placeholder={streaming ? 'Answering…' : 'Ask about your research… (Ctrl+Enter)'}
+            <ChatComposer
               value={ai.draft}
-              disabled={streaming}
-              onChange={(event) => ai.setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-                  event.preventDefault();
-                  void send();
-                }
-              }}
+              onChange={ai.setDraft}
+              onSend={() => void send()}
+              onStop={() => abortRef.current?.abort()}
+              streaming={streaming}
+              autoFocus
+              meta={
+                <>
+                  {usage ? <span>~{usage.inputTokens + usage.outputTokens} tokens</span> : null}
+                  {usage && ai.context.length ? ' · ' : null}
+                  {ai.context.length ? <span>{ai.context.length} source(s) pinned</span> : null}
+                  {!usage && !ai.context.length ? <span>Answers stay in this notebook</span> : null}
+                </>
+              }
             />
-            <div className="row between">
-              <span className="tiny faint">Answers stay in this notebook.</span>
-              <button className="btn primary sm" disabled={streaming || !ai.draft.trim()} onClick={() => void send()}>
-                <Icon name="send" size={14} /> Send
-              </button>
-            </div>
           </div>
         </>
       )}
@@ -428,46 +431,16 @@ export function AiPanel() {
         </Modal>
       ) : null}
 
-      {historyOpen ? (
-        <Modal title="Conversations" onClose={() => setHistoryOpen(false)}>
-          <div className="stack sm">
-            {conversations.length === 0 ? <p className="small muted">No conversations yet.</p> : null}
-            {conversations.map((conversation) => (
-              <div className="list-row" key={conversation.id}>
-                <button
-                  className="grow"
-                  style={{ border: 0, background: 'none', textAlign: 'left' }}
-                  onClick={() => void loadConversation(conversation.id)}
-                >
-                  <div className="title">{conversation.title}</div>
-                  <div className="tiny faint">{conversation.scope} · {relativeTime(conversation.updatedAt)}</div>
-                </button>
-                <button
-                  className="icon-btn sm"
-                  aria-label="Delete conversation"
-                  onClick={() => {
-                    void confirm({
-                      title: 'Delete conversation?',
-                      message: 'Messages from this conversation are removed.',
-                      confirmLabel: 'Delete',
-                      danger: true,
-                    }).then((ok) =>
-                      ok
-                        ? api.del(`/ai/conversations/${conversation.id}`).then(() => {
-                            if (conversationId === conversation.id) newConversation();
-                            void loadConversations();
-                          })
-                        : undefined,
-                    );
-                  }}
-                >
-                  <Icon name="trash" size={13} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </Modal>
-      ) : null}
+      <ConversationHistory
+        open={historyOpen}
+        conversations={conversations}
+        activeId={conversationId}
+        onClose={() => setHistoryOpen(false)}
+        onOpen={(id) => void loadConversation(id)}
+        onDelete={deleteConversation}
+        onRename={renameConversation}
+        onNew={newConversation}
+      />
     </aside>
   );
 }

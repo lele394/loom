@@ -11,6 +11,7 @@ export type IconName =
   | 'plus'
   | 'minus'
   | 'undo'
+  | 'copy'
   | 'close'
   | 'sun'
   | 'moon'
@@ -101,6 +102,12 @@ const paths: Record<IconName, React.ReactNode> = {
   ),
   minus: <path d="M5 12h14" />,
   undo: <><path d="M9 14 4 9l5-5" /><path d="M4 9h9a6 6 0 0 1 0 12h-3" /></>,
+  copy: (
+    <>
+      <rect x="8" y="8" width="12" height="12" rx="2" />
+      <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+    </>
+  ),
   close: <path d="m6 6 12 12M18 6 6 18" />,
   sun: (
     <>

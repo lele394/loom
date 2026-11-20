@@ -4,11 +4,11 @@ import type { ChatMessage, Conversation, Reference } from '../../../../shared/ty
 import { api, streamChat, type StreamEvent } from '../../../shared/api';
 import { useAi } from '../../../shared/aiContext';
 import { useSession } from '../../../app/session';
-import { relativeTime } from '../../../shared/hooks';
 import { Icon } from '../../../shared/icons';
 import { Markdown } from '../../../shared/markdown';
-import { Modal, Spinner, useToast } from '../../../shared/ui';
+import { useToast } from '../../../shared/ui';
 import { SourceChips, objectRoute } from '../../../shared/components';
+import { ChatComposer, ConversationHistory, CopyButton } from '../../../shared/chat';
 
 export function ReadChatPanel({
   reference,
@@ -79,6 +79,18 @@ export function ReadChatPanel({
     setStreamText('');
     setError(null);
     setUsage(null);
+    setDraft('');
+  };
+
+  const deleteConversation = async (id: string) => {
+    await api.del(`/ai/conversations/${id}`);
+    if (conversationId === id) newConversation();
+    await loadConversations();
+  };
+
+  const renameConversation = async (id: string, title: string) => {
+    await api.patch(`/ai/conversations/${id}`, { title });
+    await loadConversations();
   };
 
   const send = async () => {
@@ -232,6 +244,9 @@ export function ReadChatPanel({
                 ) : message.role === 'assistant' && message.content ? (
                   <span className="tiny faint">No sources cited — treat this as ungrounded.</span>
                 ) : null}
+                <div className="msg-actions">
+                  <CopyButton text={message.content} />
+                </div>
               </div>
             ))}
             {streaming ? (
@@ -239,9 +254,6 @@ export function ReadChatPanel({
                 <div className="who"><Icon name="sparkles" size={12} /> Assistant</div>
                 <div className="bubble">
                   {streamText ? <Markdown text={streamText} /> : <span className="typing"><i /><i /><i /></span>}
-                </div>
-                <div className="row">
-                  <button className="btn sm" onClick={() => abortRef.current?.abort()}>Stop</button>
                 </div>
               </div>
             ) : null}
@@ -254,49 +266,33 @@ export function ReadChatPanel({
           </div>
 
           <div className="read-chat-compose">
-            {usage ? <span className="tiny faint">~{usage.inputTokens + usage.outputTokens} tokens</span> : null}
-            <textarea
-              className="textarea"
-              placeholder={streaming ? 'Answering…' : 'Ask about this paper… (Ctrl+Enter)'}
+            <ChatComposer
               value={draft}
-              disabled={streaming}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-                  event.preventDefault();
-                  void send();
-                }
-              }}
+              onChange={setDraft}
+              onSend={() => void send()}
+              onStop={() => abortRef.current?.abort()}
+              streaming={streaming}
+              meta={
+                <>
+                  {usage ? <span>~{usage.inputTokens + usage.outputTokens} tokens · </span> : null}
+                  <span>Bound to the open PDF</span>
+                </>
+              }
             />
-            <div className="row between">
-              <span className="tiny faint">Bound to the open PDF</span>
-              <button className="btn primary sm" disabled={streaming || !draft.trim()} onClick={() => void send()}>
-                <Icon name="send" size={14} /> Send
-              </button>
-            </div>
           </div>
         </>
       )}
 
-      {historyOpen ? (
-        <Modal title="Conversations" onClose={() => setHistoryOpen(false)}>
-          <div className="stack sm">
-            {conversations.length === 0 ? <p className="small muted">No conversations yet.</p> : null}
-            {conversations.map((conversation) => (
-              <div className="list-row" key={conversation.id}>
-                <button
-                  className="grow"
-                  style={{ border: 0, background: 'none', textAlign: 'left' }}
-                  onClick={() => void loadConversation(conversation.id)}
-                >
-                  <div className="title">{conversation.title}</div>
-                  <div className="tiny faint">{conversation.scope} · {relativeTime(conversation.updatedAt)}</div>
-                </button>
-              </div>
-            ))}
-          </div>
-        </Modal>
-      ) : null}
+      <ConversationHistory
+        open={historyOpen}
+        conversations={conversations}
+        activeId={conversationId}
+        onClose={() => setHistoryOpen(false)}
+        onOpen={(id) => void loadConversation(id)}
+        onDelete={deleteConversation}
+        onRename={renameConversation}
+        onNew={newConversation}
+      />
     </div>
   );
 }

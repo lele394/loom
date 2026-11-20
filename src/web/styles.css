@@ -831,7 +831,63 @@ mark { background: var(--warning-soft); color: var(--text); padding: 0 2px; bord
 .citation-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; font-size: 11px; color: var(--text-muted); cursor: pointer; }
 .citation-chip:hover { border-color: var(--accent); color: var(--text); }
 .ai-compose { border-top: 1px solid var(--border); padding: 10px 12px; display: grid; gap: 8px; }
-.ai-compose textarea { min-height: 64px; max-height: 160px; resize: vertical; }
+.chat-composer { display: flex; flex-direction: column; gap: 6px; }
+.chat-composer textarea.chat-textarea {
+  min-height: 44px;
+  max-height: 220px;
+  resize: none;
+  overflow-y: hidden;
+  line-height: 1.5;
+}
+.chat-composer-foot { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.chat-composer-hint {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+.chat-copy-button { color: var(--text-muted); }
+.chat-history { display: flex; flex-direction: column; gap: 10px; }
+.chat-history-list { display: flex; flex-direction: column; gap: 3px; max-height: 52vh; overflow-y: auto; }
+.chat-history-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+}
+.chat-history-item:hover { background: var(--surface-2); }
+.chat-history-item.active { border-color: var(--accent); background: var(--accent-soft); }
+.chat-history-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 7px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.chat-history-title { font-size: 12.5px; font-weight: 600; }
+.chat-history-meta { font-size: 10.5px; color: var(--text-faint); }
+.chat-history-rename { flex: 1; min-width: 0; height: 30px; }
+.msg.user { justify-items: end; }
+.msg.user .who,
+.msg.user .msg-actions,
+.msg.user .citations { justify-self: end; }
+.msg.user .bubble {
+  max-width: 92%;
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border));
+}
+.msg-actions { opacity: .78; }
+.msg:hover .msg-actions { opacity: 1; }
 .ai-context-chips { display: flex; gap: 5px; flex-wrap: wrap; }
 .ai-empty { padding: 28px 16px; text-align: center; color: var(--text-faint); font-size: 12.5px; }
 .typing { display: inline-flex; gap: 3px; }

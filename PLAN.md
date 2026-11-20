@@ -175,6 +175,11 @@ Executable checklist for Loom v1. Checked items are implemented and verified (20
   - global Calendar destination aggregates every project with a chronological Upcoming bar
   - month grid supports multi-day events, click-to-create, edit/delete, archived-project read-only state
   - calendar activity recorded in the project timeline; export/backup coverage and API tests
+- [x] **P3.23 AI chat interaction rework** (extension, 2026-11-20)
+  - shared auto-growing composer with Ctrl/Cmd+Enter send, Shift+Enter newline, in-composer stop and drafting while streaming
+  - copy actions with copied feedback on all messages in both the assistant dock and read-mode chat
+  - searchable conversation history with active highlighting, rename, delete and new-conversation actions
+  - draft persists while streaming; user messages get classic right-aligned bubbles and calmer action styling
 - [x] **P3.22 Summary text scaling and version history** (extension, 2026-11-20)
   - read-mode summary has independent persistent text scaling before the Copy action
   - migration 014 archives each generated AI summary with model, mode, instructions and exact prompt
