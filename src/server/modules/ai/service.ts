@@ -79,7 +79,6 @@ function mapMessage(row: MessageRow): ChatMessage {
   };
 }
 
-const MAX_CONTEXT_CHARS = 24_000;
 const MAX_SOURCE_CHARS = 4_500;
 
 export class AiService {
@@ -359,12 +358,13 @@ export class AiService {
     const started = Date.now();
     const timeout = AbortSignal.timeout(180_000);
     const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
+    const appSettings = this.settings.getApp();
 
     try {
       for await (const chunk of providerInfo.provider.chat({
         model: providerInfo.model,
         messages,
-        maxTokens: 1200,
+        maxTokens: appSettings.aiChatOutputTokens,
         signal,
       })) {
         if (chunk.type === 'text') {
@@ -440,26 +440,30 @@ export class AiService {
     projectId: string | null;
     contextObjectIds: string[];
   }): Promise<RetrievedChunk[]> {
+    const contextChars = Math.max(4_000, this.settings.getApp().aiContextTokens * 4);
     let sources: RetrievedChunk[];
     if (options.scope === 'selection' && options.contextObjectIds.length) {
-      sources = this.search.chunksForObjects(options.contextObjectIds, 16);
+      sources = this.search.chunksForObjects(
+        options.contextObjectIds,
+        Math.min(600, Math.max(16, Math.ceil(contextChars / 1_200))),
+      );
     } else {
       sources = await this.search.retrieve({
         query: options.query,
         scope: options.scope,
         projectId: options.projectId,
-        limit: 8,
+        limit: Math.min(150, Math.max(8, Math.ceil(contextChars / 6_000))),
       });
     }
     const seen = new Set<string>();
     const deduped: RetrievedChunk[] = [];
     let chars = 0;
     for (const source of sources) {
-      if (seen.has(source.objectId)) continue;
+      if (seen.has(source.chunkId)) continue;
       const text = truncate(source.text, MAX_SOURCE_CHARS);
-      if (chars + text.length > MAX_CONTEXT_CHARS) break;
+      if (chars + text.length > contextChars) break;
       chars += text.length;
-      seen.add(source.objectId);
+      seen.add(source.chunkId);
       deduped.push({ ...source, text });
     }
     return deduped;
@@ -473,7 +477,12 @@ export class AiService {
   }): Promise<{ text: string; citations: Citation[]; model: string }> {
     this.checkBudget();
     const providerInfo = this.provider();
-    const chunks = this.search.chunksForObjects(input.objectIds, 20);
+    const appSettings = this.settings.getApp();
+    const contextChars = Math.max(4_000, appSettings.aiContextTokens * 4);
+    const chunks = this.search.chunksForObjects(
+      input.objectIds,
+      Math.min(600, Math.max(20, Math.ceil(contextChars / 1_200))),
+    );
     const grouped = new Map<string, RetrievedChunk[]>();
     for (const chunk of chunks) {
       const list = grouped.get(chunk.objectId) ?? [];
@@ -487,6 +496,10 @@ export class AiService {
       text: string;
       locator?: Record<string, unknown>;
     }[] = [];
+    const perObjectChars = Math.max(
+      3_000,
+      Math.floor(contextChars / Math.max(1, input.objectIds.length)),
+    );
     for (const objectId of input.objectIds) {
       const object = this.db
         .prepare('SELECT type, title FROM objects WHERE id = ? AND deleted_at IS NULL')
@@ -497,7 +510,7 @@ export class AiService {
         id: objectId,
         title: object.title,
         type: object.type,
-        text: text || this.fallbackText(objectId),
+        text: truncate(text || this.fallbackText(objectId), perObjectChars),
       });
     }
     if (!objects.length) throw notFound('Object');
@@ -511,7 +524,7 @@ export class AiService {
         { role: 'system', content: prompt.system },
         { role: 'user', content: prompt.user },
       ],
-      maxTokens: 1500,
+      maxTokens: appSettings.aiSummaryOutputTokens,
       signal: AbortSignal.timeout(180_000),
     })) {
       if (chunk.type === 'text') text += chunk.text;

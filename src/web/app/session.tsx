@@ -38,6 +38,9 @@ export interface Meta {
     digestTime: string;
     maxUploadMb: number;
     aiDailyTokenBudget: number;
+    aiContextTokens: number;
+    aiChatOutputTokens: number;
+    aiSummaryOutputTokens: number;
     pdfMetadataMode: 'text' | 'images' | 'ocr';
   };
   user: PublicUser;

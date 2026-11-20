@@ -91,7 +91,7 @@ export function buildActionMessages(options: {
     .map(
       (object, index) =>
         `<source id="${index + 1}" type="${object.type}" title="${escapeAttribute(object.title)}">
-${object.text.slice(0, 8000)}
+${object.text}
 </source>`,
     )
     .join('\n\n');
@@ -238,7 +238,7 @@ Venue: ${input.venue}${input.year ? ` (${input.year})` : ''}
 
 Source text:
 """
-${input.text.slice(0, 24_000)}
+${input.text}
 """`,
   };
 }

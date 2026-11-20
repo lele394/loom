@@ -94,7 +94,9 @@ export class LiteratureSummaryService {
       throw new AppError('ai_unavailable', 'No AI provider configured.');
     }
     const reference = this.literature.get(referenceId);
-    const mode = options.mode ?? this.settings.getApp().pdfMetadataMode;
+    const appSettings = this.settings.getApp();
+    const contextChars = Math.max(4_000, appSettings.aiContextTokens * 4);
+    const mode = options.mode ?? appSettings.pdfMetadataMode;
     const instructions = (options.instructions ?? '').slice(0, 4000);
     let input: { text: string; images: string[]; ocr: boolean };
 
@@ -109,13 +111,13 @@ export class LiteratureSummaryService {
         )
         .get(referenceId) as { text: string } | undefined;
       if (archived?.text) {
-        input = { text: archived.text.slice(0, 24_000), images: [], ocr: false };
+        input = { text: archived.text.slice(0, contextChars), images: [], ocr: false };
       } else {
         const fetched = await safeFetch(reference.url);
         if (fetched.contentType === 'application/pdf') {
           input = await this.pdfSummaryInput(Buffer.from(fetched.body, 'latin1'), reference, mode);
         } else {
-          input = { text: extractReadableText(fetched.body, 24_000), images: [], ocr: false };
+          input = { text: extractReadableText(fetched.body, contextChars), images: [], ocr: false };
         }
       }
     } else {
@@ -126,6 +128,9 @@ export class LiteratureSummaryService {
       };
     }
 
+    if (input.text.length > contextChars) {
+      input = { ...input, text: input.text.slice(0, contextChars) };
+    }
     if (!input.text.trim() && !input.images.length) {
       throw new AppError(
         'unsupported_file',
@@ -162,7 +167,7 @@ export class LiteratureSummaryService {
         { role: 'system', content: prompt.system },
         { role: 'user', content: prompt.user },
       ],
-      maxTokens: 1600,
+      maxTokens: appSettings.aiSummaryOutputTokens,
       temperature: 0.2,
       signal: AbortSignal.timeout(180_000),
     })) {

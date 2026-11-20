@@ -244,6 +244,21 @@ function AiSection() {
   );
   const [embeddingStatus, setEmbeddingStatus] = useState<EmbeddingStatusResponse | null>(null);
   const [backfillStarting, setBackfillStarting] = useState(false);
+  const [tokenBudgets, setTokenBudgets] = useState({
+    context: meta?.app.aiContextTokens ?? 64_000,
+    chatOutput: meta?.app.aiChatOutputTokens ?? 1_200,
+    summaryOutput: meta?.app.aiSummaryOutputTokens ?? 6_000,
+  });
+  const [savingTokens, setSavingTokens] = useState(false);
+
+  useEffect(() => {
+    if (!meta) return;
+    setTokenBudgets({
+      context: meta.app.aiContextTokens,
+      chatOutput: meta.app.aiChatOutputTokens,
+      summaryOutput: meta.app.aiSummaryOutputTokens,
+    });
+  }, [meta?.app.aiContextTokens, meta?.app.aiChatOutputTokens, meta?.app.aiSummaryOutputTokens]);
 
   useEffect(() => {
     let cancelled = false;
@@ -293,6 +308,23 @@ function AiSection() {
           : jobFailed
             ? 'The last embedding run failed'
             : `${pendingChunks} chunk${pendingChunks === 1 ? '' : 's'} pending`;
+
+  const saveTokenBudgets = async () => {
+    setSavingTokens(true);
+    try {
+      await api.patch('/settings/app', {
+        aiContextTokens: Math.round(tokenBudgets.context),
+        aiChatOutputTokens: Math.round(tokenBudgets.chatOutput),
+        aiSummaryOutputTokens: Math.round(tokenBudgets.summaryOutput),
+      });
+      await refresh();
+      toast('AI token budgets saved', 'success');
+    } catch (error) {
+      toast((error as Error).message, 'error');
+    } finally {
+      setSavingTokens(false);
+    }
+  };
 
   const backfillEmbeddings = async () => {
     setBackfillStarting(true);
@@ -447,6 +479,62 @@ function AiSection() {
             {jobActive ? 'Embedding…' : 'Backfill embeddings'}
           </button>
           <button className="btn sm" onClick={() => void addDemo()} disabled={busy}>Add offline demo</button>
+        </div>
+      </div>
+
+      <div className="card stack">
+        <div>
+          <h3 style={{ fontSize: 15 }}>AI token budgets</h3>
+          <p className="small faint">Context and output limits for chat, summaries and journal digests.</p>
+        </div>
+        <div className="grid-3">
+          <Field label="Context window (tokens)" help="Source material budget. 64,000 tokens ≈ 256,000 characters.">
+            <input
+              className="input"
+              type="number"
+              min={1000}
+              max={1000000}
+              step={1000}
+              value={tokenBudgets.context}
+              onChange={(event) =>
+                setTokenBudgets((current) => ({ ...current, context: Number(event.target.value) }))
+              }
+            />
+          </Field>
+          <Field label="Chat output (tokens)">
+            <input
+              className="input"
+              type="number"
+              min={64}
+              max={100000}
+              step={64}
+              value={tokenBudgets.chatOutput}
+              onChange={(event) =>
+                setTokenBudgets((current) => ({ ...current, chatOutput: Number(event.target.value) }))
+              }
+            />
+          </Field>
+          <Field label="Summary & digest output (tokens)" help="Upper bound for literature summaries, AI actions and journal digests.">
+            <input
+              className="input"
+              type="number"
+              min={128}
+              max={100000}
+              step={128}
+              value={tokenBudgets.summaryOutput}
+              onChange={(event) =>
+                setTokenBudgets((current) => ({ ...current, summaryOutput: Number(event.target.value) }))
+              }
+            />
+          </Field>
+        </div>
+        <div className="row between">
+          <span className="tiny faint">
+            Context is approximate (4 characters per token). Output limits are maximums; providers can stop earlier.
+          </span>
+          <button className="btn primary sm" disabled={savingTokens} onClick={() => void saveTokenBudgets()}>
+            {savingTokens ? 'Saving…' : 'Save token budgets'}
+          </button>
         </div>
       </div>
 

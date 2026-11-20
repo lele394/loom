@@ -15,6 +15,9 @@ export interface AppSettings {
   digestTime: string;
   maxUploadMb: number;
   aiDailyTokenBudget: number;
+  aiContextTokens: number;
+  aiChatOutputTokens: number;
+  aiSummaryOutputTokens: number;
   pdfMetadataMode: PdfMetadataMode;
 }
 
@@ -61,6 +64,9 @@ const APP_DEFAULTS: AppSettings = {
   digestTime: '06:00',
   maxUploadMb: 50,
   aiDailyTokenBudget: 0,
+  aiContextTokens: 64_000,
+  aiChatOutputTokens: 1_200,
+  aiSummaryOutputTokens: 6_000,
   pdfMetadataMode: 'ocr',
 };
 

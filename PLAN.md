@@ -175,6 +175,12 @@ Executable checklist for Loom v1. Checked items are implemented and verified (20
   - global Calendar destination aggregates every project with a chronological Upcoming bar
   - month grid supports multi-day events, click-to-create, edit/delete, archived-project read-only state
   - calendar activity recorded in the project timeline; export/backup coverage and API tests
+- [x] **P3.20 Configurable AI token budgets** (extension, 2026-11-20)
+  - app settings add `aiContextTokens` (64k default), `aiChatOutputTokens` (1.2k) and `aiSummaryOutputTokens` (6k)
+  - chat sources use the context budget with multiple chunks per object and larger retrieval caps
+  - AI actions and literature summaries share the configurable source budget and summary output cap
+  - chat output and journal digest output read their budgets from settings
+  - Settings exposes the values with validation and persistence tests
 - [x] **P3.19 Embedding progress visibility** (extension, 2026-11-20)
   - `/search/status` reports pending/total coverage, percentage and latest embedding job state/error
   - assistant status shows a live progress bar, queued/running/failed labels and retry count

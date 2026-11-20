@@ -200,7 +200,7 @@ export class JournalService {
           ],
           // Reasoning models can spend a large part of the budget on hidden
           // reasoning before emitting the actual Markdown answer.
-          maxTokens: 6000,
+          maxTokens: this.settings.getApp().aiSummaryOutputTokens,
           temperature: 0.1,
           signal: AbortSignal.timeout(180_000),
         })) {
