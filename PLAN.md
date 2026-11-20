@@ -175,6 +175,12 @@ Executable checklist for Loom v1. Checked items are implemented and verified (20
   - global Calendar destination aggregates every project with a chronological Upcoming bar
   - month grid supports multi-day events, click-to-create, edit/delete, archived-project read-only state
   - calendar activity recorded in the project timeline; export/backup coverage and API tests
+- [x] **P3.19 Embedding progress visibility** (extension, 2026-11-20)
+  - `/search/status` reports pending/total coverage, percentage and latest embedding job state/error
+  - assistant status shows a live progress bar, queued/running/failed labels and retry count
+  - backfill refuses clearly without an embedding model, avoids duplicate active jobs and reports when nothing is pending
+  - worker batches pending objects with a time budget and queues continuation jobs instead of silently stopping at 200 objects
+  - tests cover missing-model refusal, progress completion and the no-op response after full coverage
 - [x] **P3.18 Split chat and embedding defaults** (extension, 2026-11-20)
   - migration 012 adds independent `is_chat_default` and `is_embedding_default` provider flags
   - chat, journal/literature AI and embedding search resolve their own default providers

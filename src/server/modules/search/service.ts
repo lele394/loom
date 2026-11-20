@@ -756,18 +756,46 @@ export class SearchService {
   status(): {
     chunks: number;
     embedded: number;
+    pending: number;
+    percent: number;
     model: string | null;
     objects: number;
     semanticAvailable: boolean;
+    embeddingJob: {
+      id: string;
+      status: string;
+      attempts: number;
+      maxAttempts: number;
+      lastError: string | null;
+      createdAt: string;
+      startedAt: string | null;
+      finishedAt: string | null;
+    } | null;
   } {
     const coverage = this.embeddingCoverage();
     const objects = this.db
       .prepare('SELECT COUNT(*) AS count FROM objects WHERE deleted_at IS NULL')
       .get() as { count: number };
+    const job = this.jobs.listFiltered({ type: 'embed.chunks', limit: 1 })[0];
+    const pending = Math.max(0, coverage.chunks - coverage.embedded);
     return {
       ...coverage,
+      pending,
+      percent: coverage.chunks ? Math.round((coverage.embedded / coverage.chunks) * 100) : 0,
       objects: objects.count,
       semanticAvailable: coverage.embedded > 0,
+      embeddingJob: job
+        ? {
+            id: job.id,
+            status: job.status,
+            attempts: job.attempts,
+            maxAttempts: job.max_attempts,
+            lastError: job.last_error,
+            createdAt: job.created_at,
+            startedAt: job.started_at,
+            finishedAt: job.finished_at,
+          }
+        : null,
     };
   }
 }

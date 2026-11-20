@@ -13,6 +13,26 @@ import type { BackupRecord, GithubCredentialStatus, JobRecord, ObjectSummary, Pr
 
 type Tab = 'appearance' | 'ai' | 'github' | 'data' | 'jobs' | 'account' | 'about';
 
+interface EmbeddingStatusResponse {
+  chunks: number;
+  embedded: number;
+  pending: number;
+  percent: number;
+  model: string | null;
+  objects: number;
+  semanticAvailable: boolean;
+  embeddingJob: {
+    id: string;
+    status: string;
+    attempts: number;
+    maxAttempts: number;
+    lastError: string | null;
+    createdAt: string;
+    startedAt: string | null;
+    finishedAt: string | null;
+  } | null;
+}
+
 interface ProviderForm {
   id?: string;
   name: string;
@@ -222,9 +242,76 @@ function AiSection() {
   const [pdfMode, setPdfMode] = useState<PdfMetadataMode>(
     (meta?.app.pdfMetadataMode as PdfMetadataMode) ?? 'ocr',
   );
+  const [embeddingStatus, setEmbeddingStatus] = useState<EmbeddingStatusResponse | null>(null);
+  const [backfillStarting, setBackfillStarting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const data = await api.get<EmbeddingStatusResponse>('/search/status');
+        if (!cancelled) setEmbeddingStatus(data);
+      } catch {
+        // Keep the last known status if a poll fails.
+      }
+    };
+    void load();
+    const timer = window.setInterval(load, 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
 
   if (!meta) return null;
   const status = meta.ai;
+  const totalChunks = embeddingStatus?.chunks ?? status.embeddingCoverage.chunks;
+  const embeddedChunks = embeddingStatus?.embedded ?? status.embeddingCoverage.embedded;
+  const pendingChunks = embeddingStatus?.pending ?? Math.max(0, totalChunks - embeddedChunks);
+  const embeddingPercent =
+    embeddingStatus?.percent ??
+    (totalChunks ? Math.round((embeddedChunks / totalChunks) * 100) : 0);
+  const hasEmbeddingModel = Boolean(
+    embeddingStatus?.model ?? status.embeddingCoverage.model,
+  );
+  const displayedPercent = hasEmbeddingModel ? embeddingPercent : 0;
+  const job = embeddingStatus?.embeddingJob ?? null;
+  const jobActive = job?.status === 'queued' || job?.status === 'running';
+  const jobFailed = job?.status === 'failed' || job?.status === 'dead';
+  const progressDone =
+    hasEmbeddingModel && totalChunks > 0 && pendingChunks === 0 && !jobActive;
+  const progressLabel = !hasEmbeddingModel
+    ? 'Configure an embedding provider and model to enable semantic search.'
+    : totalChunks === 0
+      ? 'No chunks to embed yet. Reindex content first.'
+      : jobActive
+        ? job?.status === 'queued'
+          ? 'Embedding queued'
+          : 'Embedding in progress'
+        : pendingChunks === 0
+          ? 'All chunks are embedded'
+          : jobFailed
+            ? 'The last embedding run failed'
+            : `${pendingChunks} chunk${pendingChunks === 1 ? '' : 's'} pending`;
+
+  const backfillEmbeddings = async () => {
+    setBackfillStarting(true);
+    try {
+      const result = await api.post<{ jobId: string | null; message?: string }>(
+        '/search/embeddings/rebuild',
+      );
+      toast(
+        result.message ?? (result.jobId ? 'Embedding backfill queued' : 'Nothing to embed'),
+        result.jobId ? 'success' : 'info',
+      );
+      const next = await api.get<EmbeddingStatusResponse>('/search/status');
+      setEmbeddingStatus(next);
+    } catch (error) {
+      toast((error as Error).message, 'error');
+    } finally {
+      setBackfillStarting(false);
+    }
+  };
 
   const save = async () => {
     if (!editing) return;
@@ -307,7 +394,30 @@ function AiSection() {
         <div className="grid-3">
           <div><div className="tiny faint">Chat</div><div className="small">{status.chat ? 'available' : 'unavailable'}</div></div>
           <div><div className="tiny faint">Embeddings</div><div className="small">{status.embeddings ? 'configured' : 'not configured'}</div></div>
-          <div><div className="tiny faint">Coverage</div><div className="small">{status.embeddingCoverage.embedded}/{status.embeddingCoverage.chunks} chunks</div></div>
+          <div><div className="tiny faint">Coverage</div><div className="small">{embeddedChunks}/{totalChunks} chunks</div></div>
+        </div>
+        <div className="embedding-progress">
+          <div className="row between">
+            <span className="tiny faint">Embedding progress</span>
+            <span className="tiny faint">
+              {embeddedChunks}/{totalChunks} · {displayedPercent}%
+            </span>
+          </div>
+          <div className="progress-track">
+            <span
+              className={`progress-fill ${jobFailed ? 'failed' : progressDone ? 'done' : ''}`}
+              style={{ width: `${displayedPercent}%` }}
+            />
+          </div>
+          <div className="row between">
+            <span className={`tiny ${jobFailed ? '' : 'faint'}`} style={jobFailed ? { color: 'var(--danger)' } : undefined}>
+              {progressLabel}
+            </span>
+            {jobActive ? <span className="tiny faint">attempt {job?.attempts}/{job?.maxAttempts}</span> : null}
+          </div>
+          {jobFailed && job?.lastError ? (
+            <div className="tiny" style={{ color: 'var(--danger)' }}>{job.lastError}</div>
+          ) : null}
         </div>
         <div className="tiny faint">
           Chat default: {status.defaultProvider?.name ?? 'none'} · Embedding default:{' '}
@@ -316,7 +426,26 @@ function AiSection() {
         {status.reasons.length ? <ul className="small mute" style={{ margin: 0, paddingLeft: 18 }}>{status.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul> : null}
         <div className="row">
           <button className="btn sm" onClick={() => void api.post('/search/reindex').then(() => toast('Reindex queued', 'success'))}>Rebuild index</button>
-          <button className="btn sm" onClick={() => void api.post('/search/embeddings/rebuild').then(() => toast('Embedding backfill queued', 'success'))}>Backfill embeddings</button>
+          <button
+            className="btn sm"
+            disabled={
+              backfillStarting ||
+              !hasEmbeddingModel ||
+              totalChunks === 0 ||
+              pendingChunks === 0 ||
+              jobActive
+            }
+            title={
+              !hasEmbeddingModel
+                ? 'Configure an embedding provider and model first.'
+                : jobActive
+                  ? 'An embedding job is already running.'
+                  : undefined
+            }
+            onClick={() => void backfillEmbeddings()}
+          >
+            {jobActive ? 'Embedding…' : 'Backfill embeddings'}
+          </button>
           <button className="btn sm" onClick={() => void addDemo()} disabled={busy}>Add offline demo</button>
         </div>
       </div>

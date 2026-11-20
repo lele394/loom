@@ -26,19 +26,40 @@ export function createWorker(ctx: Ctx): Worker {
     },
     'embed.chunks': async (payload) => {
       const cfg = ctx.services.search.embeddingConfig();
-      if (!cfg) return;
+      if (!cfg) {
+        throw new AppError(
+          'ai_unavailable',
+          'No embedding model is configured. Select an embedding provider and model first.',
+        );
+      }
       const objectId = payload.objectId ? String(payload.objectId) : null;
       if (objectId) {
         await ctx.services.search.embedObject(objectId);
         return;
       }
-      const pending = ctx.db
+
+      const started = Date.now();
+      const pendingSql =
+        'SELECT DISTINCT object_id FROM chunks WHERE embedding IS NULL OR embedding_model != ? LIMIT 40';
+      while (Date.now() - started < 90_000) {
+        const pending = ctx.db.prepare(pendingSql).all(cfg.modelKey) as { object_id: string }[];
+        if (!pending.length) return;
+        for (const row of pending) {
+          await ctx.services.search.embedObject(row.object_id);
+        }
+      }
+      const remaining = ctx.db
         .prepare(
-          'SELECT DISTINCT object_id FROM chunks WHERE embedding IS NULL OR embedding_model != ? LIMIT 200',
+          'SELECT COUNT(DISTINCT object_id) AS count FROM chunks WHERE embedding IS NULL OR embedding_model != ?',
         )
-        .all(cfg.modelKey) as { object_id: string }[];
-      for (const row of pending) {
-        await ctx.services.search.embedObject(row.object_id);
+        .get(cfg.modelKey) as { count: number };
+      if (remaining.count > 0) {
+        ctx.jobs.enqueue('embed.chunks', {
+          payload: {},
+          idempotencyKey: `embed:continue:${Date.now()}`,
+          priority: 60,
+          maxAttempts: 3,
+        });
       }
     },
     'extract.attachment': async (payload) => {

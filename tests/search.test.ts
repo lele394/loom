@@ -58,6 +58,43 @@ describe('search', () => {
     expect(Array.isArray(response.body.results)).toBe(true);
   });
 
+  it('reports embedding progress and refuses backfill without an embedding model', async () => {
+    await harness.request('POST', '/notes', {
+      title: 'Pending embedding note',
+      projectId: harness.projectId,
+      blocks: [{ type: 'paragraph', text: 'Chunks waiting for an embedding model.' }],
+    });
+    const before = await harness.request('GET', '/search/status');
+    expect(before.body.chunks).toBeGreaterThan(0);
+    expect(before.body.pending).toBeGreaterThan(0);
+    expect(before.body.model).toBeNull();
+    expect(before.body.embeddingJob).toBeNull();
+
+    const refused = await harness.request('POST', '/search/embeddings/rebuild', {});
+    expect(refused.status).toBe(503);
+    expect(refused.body.error.code).toBe('ai_unavailable');
+
+    await harness.request('POST', '/ai/providers', {
+      name: 'Local embeddings',
+      kind: 'fake',
+      chatModel: '',
+      embedModel: 'fake-embed',
+      isEmbeddingDefault: true,
+    });
+    await harness.drain();
+
+    const after = await harness.request('GET', '/search/status');
+    expect(after.body.embedded).toBe(after.body.chunks);
+    expect(after.body.pending).toBe(0);
+    expect(after.body.percent).toBe(100);
+    expect(after.body.embeddingJob.status).toBe('succeeded');
+
+    const complete = await harness.request('POST', '/search/embeddings/rebuild', {});
+    expect(complete.status).toBe(202);
+    expect(complete.body.jobId).toBeNull();
+    expect(complete.body.message).toContain('already embedded');
+  });
+
   it('indexes embeddings and exposes hybrid retrieval', async () => {
     await harness.request('POST', '/notes', {
       title: 'Energy note',

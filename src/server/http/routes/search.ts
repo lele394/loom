@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Ctx } from '../../ctx';
 import { parse } from '../errors';
 import { searchQuerySchema } from '../../../shared/schemas';
+import { AppError } from '../../core/errors';
 
 export async function searchRoutes(app: FastifyInstance, ctx: Ctx): Promise<void> {
   app.get('/search', async (request, reply) => {
@@ -38,6 +39,34 @@ export async function searchRoutes(app: FastifyInstance, ctx: Ctx): Promise<void
   });
 
   app.post('/search/embeddings/rebuild', async (_request, reply) => {
+    if (!ctx.services.search.embeddingConfig()) {
+      throw new AppError(
+        'ai_unavailable',
+        'Select an embedding provider and model before running a backfill.',
+      );
+    }
+    const status = ctx.services.search.status();
+    if (status.chunks === 0) {
+      return reply.status(202).send({
+        jobId: null,
+        message: 'There are no text chunks to embed yet. Reindex your content first.',
+      });
+    }
+    if (status.pending === 0) {
+      return reply.status(202).send({
+        jobId: null,
+        message: 'All chunks are already embedded with the current model.',
+      });
+    }
+    if (
+      status.embeddingJob &&
+      (status.embeddingJob.status === 'queued' || status.embeddingJob.status === 'running')
+    ) {
+      return reply.status(202).send({
+        jobId: status.embeddingJob.id,
+        message: 'An embedding job is already running.',
+      });
+    }
     const jobId = ctx.jobs.enqueue('embed.chunks', {
       payload: {},
       idempotencyKey: `embed:all:${ctx.clock.iso()}`,

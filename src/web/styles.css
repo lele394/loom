@@ -854,6 +854,22 @@ mark { background: var(--warning-soft); color: var(--text); padding: 0 2px; bord
 .timeline-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); display: inline-block; margin-right: 7px; vertical-align: middle; }
 
 /* ── Settings ─────────────────────────────────────────────────────────── */
+.embedding-progress { display: flex; flex-direction: column; gap: 5px; }
+.progress-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 350ms ease;
+}
+.progress-fill.done { background: var(--success); }
+.progress-fill.failed { background: var(--danger); }
 .swatches { display: flex; gap: 10px; flex-wrap: wrap; }
 .swatch { width: 82px; border: 1px solid var(--border); border-radius: 10px; padding: 7px; background: var(--surface); cursor: pointer; text-align: center; font-size: 11px; color: var(--text-muted); }
 .swatch.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--ring); }

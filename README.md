@@ -74,7 +74,7 @@ Any endpoint implementing the OpenAI REST shape works:
 | LM Studio / vLLM / OpenRouter | their `/v1` URL | OpenAI-compatible |
 | Offline demo | — | Deterministic, no network, useful for evaluating the UI |
 
-Chat and embeddings are independent, including their default providers: for example, use a remote inference server for chat and a laptop-local `nomic-embed-text` endpoint for embeddings. Embeddings are needed for semantic search and improve retrieval, but text search and the whole notebook work without them. API keys are encrypted with AES-256-GCM using `LOOM_SECRET` (or `data/master.key`) and never returned by the API.
+Chat and embeddings are independent, including their default providers: for example, use a remote inference server for chat and a laptop-local `nomic-embed-text` endpoint for embeddings. Embeddings are needed for semantic search and improve retrieval, but text search and the whole notebook work without them. Assistant status shows live chunk coverage, the active embedding job, retry state and errors; backfill is disabled until an embedding model is configured. API keys are encrypted with AES-256-GCM using `LOOM_SECRET` (or `data/master.key`) and never returned by the API.
 
 Answers are instructed to cite `[n]` sources; citations are validated against the retrieved set and link back to the exact note block or PDF page. When no source supports an answer, the assistant is told to say so.
 
@@ -203,7 +203,7 @@ If you outgrow SQLite, the repository and `VectorIndex`/`BlobStore`/`JobHandler`
 
 ## Verification
 
-The repository ships with 92 tests covering auth/CSRF, notes and conflict handling, wikilinks/backlinks, tasks and ordering, FTS + chunk search + embeddings, PDF extraction and sniffing, AI streaming/citations, backup/restore, export integrity, timezone/DST and BibTeX.
+The repository ships with 93 tests covering auth/CSRF, notes and conflict handling, wikilinks/backlinks, tasks and ordering, FTS + chunk search + embeddings, PDF extraction and sniffing, AI streaming/citations, backup/restore, export integrity, timezone/DST and BibTeX.
 
 ```bash
 npm run typecheck && npm run check:boundaries && npm test && npm run build
