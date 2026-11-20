@@ -450,7 +450,7 @@ export function ReadWindow({ referenceId }: { referenceId: string }) {
           />
         ) : null}
         {id === 'summary' ? (
-          <AiSummaryPanel reference={reference} onUpdated={handleReferenceUpdate} />
+          <AiSummaryPanel reference={reference} onUpdated={handleReferenceUpdate} variant="reader" />
         ) : null}
         {id === 'chat' ? (
           <ReadChatPanel reference={reference} onOpenPage={goToPage} />

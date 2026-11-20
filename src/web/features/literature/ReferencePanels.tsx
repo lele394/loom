@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../../shared/api';
 import { PDF_METADATA_MODES, type PdfMetadataMode } from '../../../shared/constants';
 import type { Reference } from '../../../shared/types';
-import { Field, Spinner, useToast } from '../../shared/ui';
+import { Field, Modal, Spinner, useToast } from '../../shared/ui';
+import { Icon } from '../../shared/icons';
 import { Markdown } from '../../shared/markdown';
 import { formatDateTime, relativeTime } from '../../shared/hooks';
 
@@ -63,9 +64,11 @@ export function ReferenceNotesPanel({
 export function AiSummaryPanel({
   reference,
   onUpdated,
+  variant = 'card',
 }: {
   reference: Reference;
   onUpdated: (reference: Reference) => void;
+  variant?: 'card' | 'reader';
 }) {
   const { toast } = useToast();
   const [mode, setMode] = useState<PdfMetadataMode>('ocr');
@@ -73,6 +76,7 @@ export function AiSummaryPanel({
   const [busy, setBusy] = useState(false);
   const [jobStatus, setJobStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
   const loadedId = useRef(reference.id);
 
   useEffect(() => {
@@ -122,6 +126,127 @@ export function AiSummaryPanel({
     }
   };
 
+  const controls = (
+    <>
+      <Field label="Extraction mode">
+        <select className="select" value={mode} onChange={(event) => setMode(event.target.value as PdfMetadataMode)}>
+          {PDF_METADATA_MODES.map((value) => (
+            <option key={value} value={value}>
+              {value === 'ocr' ? 'OCR then text' : value === 'images' ? 'Page images' : 'Extracted text'}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label={reference.aiSummary ? 'Extra instructions for this rerun' : 'Optional instructions'}>
+        <textarea
+          className="textarea"
+          style={{ minHeight: 96 }}
+          value={instructions}
+          onChange={(event) => setInstructions(event.target.value)}
+          placeholder="e.g. Focus on the experimental method and compare it to my DVFS work. Keep it under 200 words."
+        />
+      </Field>
+      <p className="tiny faint" style={{ margin: 0 }}>
+        Summaries use the selected extraction mode; OCR is the default. They never overwrite personal notes.
+      </p>
+    </>
+  );
+
+  const copySummary = async () => {
+    if (!reference.aiSummary) return;
+    try {
+      await navigator.clipboard.writeText(reference.aiSummary);
+      toast('Summary copied', 'success');
+    } catch {
+      toast('Could not copy the summary.', 'error');
+    }
+  };
+
+  if (variant === 'reader') {
+    return (
+      <div className="read-summary">
+        <div className="read-summary-bar">
+          <div className="read-summary-meta">
+            {reference.aiSummary ? (
+              <>
+                <span className="badge success">Ready</span>
+                <span className="tiny faint read-summary-model" title={formatDateTime(reference.aiSummaryAt)}>
+                  {relativeTime(reference.aiSummaryAt)}
+                  {reference.aiSummaryModel ? ` · ${reference.aiSummaryModel}` : ''}
+                </span>
+              </>
+            ) : (
+              <span className="badge">No summary</span>
+            )}
+          </div>
+          <span className="grow" />
+          {reference.aiSummary ? (
+            <button className="btn ghost sm" onClick={() => void copySummary()}>
+              Copy
+            </button>
+          ) : null}
+          <button
+            className={`btn sm ${reference.aiSummary ? '' : 'primary'}`}
+            disabled={busy}
+            onClick={() => setEditorOpen(true)}
+          >
+            <Icon name="sparkles" size={13} />
+            {reference.aiSummary ? 'Regenerate' : 'Generate'}
+          </button>
+        </div>
+
+        {busy ? (
+          <div className="read-summary-status">
+            <Spinner />
+            <span>{jobStatus === 'queued' ? 'Summary queued…' : 'Reading the PDF and writing the summary…'}</span>
+          </div>
+        ) : null}
+        {error ? <div className="read-summary-error">{error}</div> : null}
+
+        {reference.aiSummary ? (
+          <div className="read-summary-body">
+            <Markdown text={reference.aiSummary} />
+          </div>
+        ) : (
+          <div className="read-summary-empty">
+            <span className="read-summary-empty-icon"><Icon name="sparkles" size={22} /></span>
+            <strong>No AI summary yet</strong>
+            <p className="small">
+              Generate a structured overview of this paper. It stays separate from your personal notes.
+            </p>
+            <button className="btn primary sm" disabled={busy} onClick={() => setEditorOpen(true)}>
+              Generate summary
+            </button>
+          </div>
+        )}
+
+        {editorOpen ? (
+          <Modal
+            title={reference.aiSummary ? 'Regenerate AI summary' : 'Generate AI summary'}
+            onClose={() => setEditorOpen(false)}
+            footer={
+              <>
+                <button className="btn" onClick={() => setEditorOpen(false)}>Cancel</button>
+                <button
+                  className="btn primary"
+                  disabled={busy}
+                  onClick={() => {
+                    setEditorOpen(false);
+                    void generate();
+                  }}
+                >
+                  {busy ? 'Working…' : reference.aiSummary ? 'Regenerate' : 'Generate'}
+                </button>
+              </>
+            }
+          >
+            <div className="stack sm">{controls}</div>
+          </Modal>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div className="stack sm">
       <div className="row between">
@@ -142,26 +267,7 @@ export function AiSummaryPanel({
           <span className="tiny">The summary is stored separately from your personal notes.</span>
         </div>
       )}
-      <div className="grid-2" style={{ gap: 8 }}>
-        <Field label="Extraction mode">
-          <select className="select" value={mode} onChange={(event) => setMode(event.target.value as PdfMetadataMode)}>
-            {PDF_METADATA_MODES.map((value) => (
-              <option key={value} value={value}>
-                {value === 'ocr' ? 'OCR then text' : value === 'images' ? 'Page images' : 'Extracted text'}
-              </option>
-            ))}
-          </select>
-        </Field>
-      </div>
-      <Field label={reference.aiSummary ? 'Rerun with extra instructions' : 'Optional instructions'}>
-        <textarea
-          className="textarea"
-          style={{ minHeight: 70 }}
-          value={instructions}
-          onChange={(event) => setInstructions(event.target.value)}
-          placeholder="e.g. Focus on the experimental method and compare it to my DVFS work. Keep it under 200 words."
-        />
-      </Field>
+      <div className="stack sm">{controls}</div>
       <div className="row">
         <button className="btn primary sm" disabled={busy} onClick={() => void generate()}>
           {busy ? <><Spinner /> {jobStatus ?? 'Working…'}</> : reference.aiSummary ? 'Regenerate with AI' : 'Summarize with AI'}
@@ -169,9 +275,6 @@ export function AiSummaryPanel({
         {jobStatus ? <span className="tiny faint">{jobStatus}</span> : null}
       </div>
       {error ? <div className="error-text">{error}</div> : null}
-      <span className="tiny faint">
-        Summaries use the selected extraction mode; OCR is the default. They never overwrite personal notes.
-      </span>
     </div>
   );
 }

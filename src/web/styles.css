@@ -1521,6 +1521,82 @@ mark { background: var(--warning-soft); color: var(--text); padding: 0 2px; bord
   color: var(--text-muted);
 }
 
+.read-summary { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.read-summary-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.read-summary-meta { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; }
+.read-summary-model {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.read-summary-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.read-summary-error {
+  margin: 10px 12px 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
+  border-radius: 8px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 12px;
+}
+.read-summary-body { flex: 1; min-height: 0; overflow: auto; padding: 18px 20px 32px; }
+.read-summary-body .md {
+  max-width: 78ch;
+  margin: 0 auto;
+  font-size: 13.5px;
+  line-height: 1.72;
+  color: var(--reader);
+}
+.read-summary-body .md h2 {
+  margin-top: 1.35em;
+  padding-bottom: .22em;
+  border-bottom: 1px solid var(--border);
+  font-size: 16px;
+}
+.read-summary-body .md h3 { font-size: 14.5px; }
+.read-summary-body .md ul { margin: .45em 0 .8em; }
+.read-summary-body .md li { margin: .22em 0; }
+.read-summary-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 28px;
+  text-align: center;
+  color: var(--text-muted);
+}
+.read-summary-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  margin-bottom: 4px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.read-summary-empty p { max-width: 38ch; margin: 0; }
+
 .read-chat { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .read-chat-bound {
   display: flex;
