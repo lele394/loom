@@ -32,6 +32,14 @@ describe('AI token budgets', () => {
     expect(meta.body.app.aiChatOutputTokens).toBe(4_000);
     expect(meta.body.app.aiSummaryOutputTokens).toBe(8_000);
 
+    const providerDefault = await harness.request('PATCH', '/settings/app', {
+      aiChatOutputTokens: 0,
+      aiSummaryOutputTokens: 0,
+    });
+    expect(providerDefault.status).toBe(200);
+    expect(providerDefault.body.aiChatOutputTokens).toBe(0);
+    expect(providerDefault.body.aiSummaryOutputTokens).toBe(0);
+
     const invalid = await harness.request('PATCH', '/settings/app', {
       aiContextTokens: 10,
     });

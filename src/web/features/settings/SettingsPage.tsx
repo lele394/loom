@@ -501,11 +501,11 @@ function AiSection() {
               }
             />
           </Field>
-          <Field label="Chat output (tokens)">
+          <Field label="Chat output (tokens)" help="0 = provider default / model limit (no max_tokens sent).">
             <input
               className="input"
               type="number"
-              min={64}
+              min={0}
               max={100000}
               step={64}
               value={tokenBudgets.chatOutput}
@@ -514,11 +514,11 @@ function AiSection() {
               }
             />
           </Field>
-          <Field label="Summary & digest output (tokens)" help="Upper bound for literature summaries, AI actions and journal digests.">
+          <Field label="Summary & digest output (tokens)" help="0 = provider default / model limit. Upper bound otherwise.">
             <input
               className="input"
               type="number"
-              min={128}
+              min={0}
               max={100000}
               step={128}
               value={tokenBudgets.summaryOutput}
@@ -531,6 +531,7 @@ function AiSection() {
         <div className="row between">
           <span className="tiny faint">
             Context is approximate (4 characters per token). Output limits are maximums; providers can stop earlier.
+            Set output to 0 to omit the cap and let the provider/model decide.
           </span>
           <button className="btn primary sm" disabled={savingTokens} onClick={() => void saveTokenBudgets()}>
             {savingTokens ? 'Saving…' : 'Save token budgets'}

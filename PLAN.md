@@ -181,6 +181,7 @@ Executable checklist for Loom v1. Checked items are implemented and verified (20
   - AI actions and literature summaries share the configurable source budget and summary output cap
   - chat output and journal digest output read their budgets from settings
   - Settings exposes the values with validation and persistence tests
+  - output budgets accept 0 to omit `max_tokens` and defer to the provider/model limit
 - [x] **P3.19 Embedding progress visibility** (extension, 2026-11-20)
   - `/search/status` reports pending/total coverage, percentage and latest embedding job state/error
   - assistant status shows a live progress bar, queued/running/failed labels and retry count

@@ -547,8 +547,8 @@ export const appSettingsUpdateSchema = z.object({
   maxUploadMb: z.number().int().min(1).max(500).optional(),
   aiDailyTokenBudget: z.number().int().min(0).max(10_000_000).optional(),
   aiContextTokens: z.number().int().min(1_000).max(1_000_000).optional(),
-  aiChatOutputTokens: z.number().int().min(64).max(100_000).optional(),
-  aiSummaryOutputTokens: z.number().int().min(128).max(100_000).optional(),
+  aiChatOutputTokens: z.number().int().min(0).max(100_000).optional(),
+  aiSummaryOutputTokens: z.number().int().min(0).max(100_000).optional(),
   pdfMetadataMode: z.enum(PDF_METADATA_MODES).optional(),
 });
 
