@@ -1,13 +1,28 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { api } from '../../shared/api';
 import { PDF_METADATA_MODES, type PdfMetadataMode } from '../../../shared/constants';
-import type { Reference } from '../../../shared/types';
+import type { Reference, SummaryVersion, SummaryVersionSummary } from '../../../shared/types';
 import { Field, Modal, Spinner, useToast } from '../../shared/ui';
 import { Icon } from '../../shared/icons';
 import { Markdown } from '../../shared/markdown';
 import { formatDateTime, relativeTime } from '../../shared/hooks';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const SUMMARY_SCALE_MIN = 0.75;
+const SUMMARY_SCALE_MAX = 3;
+const SUMMARY_SCALE_STEP = 0.1;
+
+function readSummaryScale(): number {
+  try {
+    const value = Number(localStorage.getItem('loom-read-summary-scale'));
+    return Number.isFinite(value) && value >= SUMMARY_SCALE_MIN && value <= SUMMARY_SCALE_MAX
+      ? value
+      : 1;
+  } catch {
+    return 1;
+  }
+}
 
 export function ReferenceNotesPanel({
   reference,
@@ -77,14 +92,96 @@ export function AiSummaryPanel({
   const [jobStatus, setJobStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [summaryScale, setSummaryScale] = useState(readSummaryScale);
+  const [summaryView, setSummaryView] = useState<'summary' | 'versions'>('summary');
+  const [versions, setVersions] = useState<SummaryVersionSummary[]>([]);
+  const [versionsLoading, setVersionsLoading] = useState(false);
+  const [versionsError, setVersionsError] = useState<string | null>(null);
+  const [selectedVersion, setSelectedVersion] = useState<SummaryVersion | null>(null);
+  const [versionLoading, setVersionLoading] = useState(false);
+  const [versionTitle, setVersionTitle] = useState('');
+  const [versionTitleSaving, setVersionTitleSaving] = useState(false);
   const loadedId = useRef(reference.id);
 
   useEffect(() => {
     if (loadedId.current !== reference.id) {
       loadedId.current = reference.id;
       setInstructions(reference.aiSummaryInstructions);
+      setSummaryView('summary');
+      setSelectedVersion(null);
     }
   }, [reference.id, reference.aiSummaryInstructions]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('loom-read-summary-scale', String(summaryScale));
+    } catch {
+      // Scaling still works for this session if storage is disabled.
+    }
+  }, [summaryScale]);
+
+  const loadVersions = async () => {
+    setVersionsLoading(true);
+    setVersionsError(null);
+    try {
+      const data = await api.get<{ versions: SummaryVersionSummary[] }>(
+        `/references/${reference.id}/summary-versions`,
+      );
+      setVersions(data.versions);
+    } catch (caught) {
+      setVersionsError((caught as Error).message);
+    } finally {
+      setVersionsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (variant !== 'reader') return;
+    void loadVersions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [variant, reference.id, reference.aiSummaryAt]);
+
+  const openVersion = async (id: string) => {
+    setVersionLoading(true);
+    setVersionsError(null);
+    try {
+      const version = await api.get<SummaryVersion>(`/summary-versions/${id}`);
+      setSelectedVersion(version);
+      setVersionTitle(version.title);
+    } catch (caught) {
+      setVersionsError((caught as Error).message);
+    } finally {
+      setVersionLoading(false);
+    }
+  };
+
+  const saveVersionTitle = async () => {
+    if (!selectedVersion) return;
+    setVersionTitleSaving(true);
+    try {
+      const updated = await api.patch<SummaryVersionSummary>(
+        `/summary-versions/${selectedVersion.id}`,
+        { title: versionTitle },
+      );
+      setSelectedVersion({ ...selectedVersion, title: updated.title });
+      setVersions((current) =>
+        current.map((version) => (version.id === updated.id ? updated : version)),
+      );
+      toast('Version title saved', 'success');
+    } catch (caught) {
+      toast((caught as Error).message, 'error');
+    } finally {
+      setVersionTitleSaving(false);
+    }
+  };
+
+  const changeSummaryScale = (delta: number) => {
+    setSummaryScale((current) =>
+      Math.round(
+        Math.min(SUMMARY_SCALE_MAX, Math.max(SUMMARY_SCALE_MIN, current + delta)) * 10,
+      ) / 10,
+    );
+  };
 
   const generate = async () => {
     setBusy(true);
@@ -164,7 +261,10 @@ export function AiSummaryPanel({
 
   if (variant === 'reader') {
     return (
-      <div className="read-summary">
+      <div
+        className="read-summary"
+        style={{ '--summary-scale': summaryScale } as CSSProperties}
+      >
         <div className="read-summary-bar">
           <div className="read-summary-meta">
             {reference.aiSummary ? (
@@ -180,43 +280,194 @@ export function AiSummaryPanel({
             )}
           </div>
           <span className="grow" />
-          {reference.aiSummary ? (
+          <div className="read-notes-scale" role="group" aria-label="Summary text size">
+            <button
+              className="icon-btn sm"
+              title="Smaller summary text"
+              aria-label="Smaller summary text"
+              disabled={summaryScale <= SUMMARY_SCALE_MIN}
+              onClick={() => changeSummaryScale(-SUMMARY_SCALE_STEP)}
+            >
+              <Icon name="minus" size={12} />
+            </button>
+            <button
+              className="btn ghost sm"
+              title="Reset summary text size to 100%"
+              onClick={() => setSummaryScale(1)}
+            >
+              {Math.round(summaryScale * 100)}%
+            </button>
+            <button
+              className="icon-btn sm"
+              title="Larger summary text"
+              aria-label="Larger summary text"
+              disabled={summaryScale >= SUMMARY_SCALE_MAX}
+              onClick={() => changeSummaryScale(SUMMARY_SCALE_STEP)}
+            >
+              <Icon name="plus" size={12} />
+            </button>
+          </div>
+          {summaryView === 'summary' && reference.aiSummary ? (
             <button className="btn ghost sm" onClick={() => void copySummary()}>
               Copy
             </button>
           ) : null}
+          {summaryView === 'summary' ? (
+            <button
+              className={`btn sm ${reference.aiSummary ? '' : 'primary'}`}
+              disabled={busy}
+              onClick={() => setEditorOpen(true)}
+            >
+              <Icon name="sparkles" size={13} />
+              {reference.aiSummary ? 'Regenerate' : 'Generate'}
+            </button>
+          ) : null}
+        </div>
+
+        <div className="read-summary-tabs" role="tablist" aria-label="Summary views">
           <button
-            className={`btn sm ${reference.aiSummary ? '' : 'primary'}`}
-            disabled={busy}
-            onClick={() => setEditorOpen(true)}
+            role="tab"
+            aria-selected={summaryView === 'summary'}
+            className={summaryView === 'summary' ? 'active' : ''}
+            onClick={() => setSummaryView('summary')}
           >
-            <Icon name="sparkles" size={13} />
-            {reference.aiSummary ? 'Regenerate' : 'Generate'}
+            Summary
+          </button>
+          <button
+            role="tab"
+            aria-selected={summaryView === 'versions'}
+            className={summaryView === 'versions' ? 'active' : ''}
+            onClick={() => {
+              setSummaryView('versions');
+              setSelectedVersion(null);
+            }}
+          >
+            Versions
+            {versions.length ? <span className="badge">{versions.length}</span> : null}
           </button>
         </div>
 
-        {busy ? (
-          <div className="read-summary-status">
-            <Spinner />
-            <span>{jobStatus === 'queued' ? 'Summary queued…' : 'Reading the PDF and writing the summary…'}</span>
-          </div>
-        ) : null}
-        {error ? <div className="read-summary-error">{error}</div> : null}
+        {summaryView === 'summary' ? (
+          <>
+            {busy ? (
+              <div className="read-summary-status">
+                <Spinner />
+                <span>{jobStatus === 'queued' ? 'Summary queued…' : 'Reading the PDF and writing the summary…'}</span>
+              </div>
+            ) : null}
+            {error ? <div className="read-summary-error">{error}</div> : null}
 
-        {reference.aiSummary ? (
-          <div className="read-summary-body">
-            <Markdown text={reference.aiSummary} />
-          </div>
+            {reference.aiSummary ? (
+              <div className="read-summary-body">
+                <Markdown text={reference.aiSummary} />
+              </div>
+            ) : (
+              <div className="read-summary-empty">
+                <span className="read-summary-empty-icon"><Icon name="sparkles" size={22} /></span>
+                <strong>No AI summary yet</strong>
+                <p className="small">
+                  Generate a structured overview of this paper. It stays separate from your personal notes.
+                </p>
+                <button className="btn primary sm" disabled={busy} onClick={() => setEditorOpen(true)}>
+                  Generate summary
+                </button>
+              </div>
+            )}
+          </>
         ) : (
-          <div className="read-summary-empty">
-            <span className="read-summary-empty-icon"><Icon name="sparkles" size={22} /></span>
-            <strong>No AI summary yet</strong>
-            <p className="small">
-              Generate a structured overview of this paper. It stays separate from your personal notes.
-            </p>
-            <button className="btn primary sm" disabled={busy} onClick={() => setEditorOpen(true)}>
-              Generate summary
-            </button>
+          <div className="read-summary-body summary-versions-body">
+            {selectedVersion ? (
+              <div className="summary-version-detail">
+                <button className="btn ghost sm" onClick={() => setSelectedVersion(null)}>
+                  <Icon name="chevron-left" size={13} /> All versions
+                </button>
+                <div className="summary-version-title-row">
+                  <input
+                    className="input"
+                    maxLength={250}
+                    value={versionTitle}
+                    onChange={(event) => setVersionTitle(event.target.value)}
+                    placeholder="Add a title for this version"
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        void saveVersionTitle();
+                      }
+                    }}
+                  />
+                  <button
+                    className="btn sm"
+                    disabled={
+                      versionTitleSaving || versionTitle.trim() === selectedVersion.title
+                    }
+                    onClick={() => void saveVersionTitle()}
+                  >
+                    {versionTitleSaving ? 'Saving…' : 'Save title'}
+                  </button>
+                </div>
+                <div className="row between">
+                  <span className="tiny faint">
+                    {formatDateTime(selectedVersion.createdAt)}
+                    {selectedVersion.model ? ` · ${selectedVersion.model}` : ''}
+                    {selectedVersion.mode ? ` · ${selectedVersion.mode}` : ''}
+                  </span>
+                  <span className="tiny faint">{versionTitle.length}/250</span>
+                </div>
+                <div className="summary-version-summary">
+                  <Markdown text={selectedVersion.summaryMarkdown} />
+                </div>
+                <details className="summary-prompt-details">
+                  <summary>Prompt used</summary>
+                  <pre className="summary-prompt">{selectedVersion.prompt || '(not recorded)'}</pre>
+                </details>
+              </div>
+            ) : (
+              <>
+                <div className="row between" style={{ marginBottom: 8 }}>
+                  <strong className="small">Summary versions</strong>
+                  <button className="btn ghost sm" onClick={() => void loadVersions()}>
+                    Refresh
+                  </button>
+                </div>
+                {versionsLoading ? <Spinner label="Loading versions…" /> : null}
+                {versionsError ? <div className="read-summary-error">{versionsError}</div> : null}
+                {!versionsLoading && !versions.length ? (
+                  <div className="read-summary-empty" style={{ minHeight: 180 }}>
+                    <Icon name="clock" size={22} />
+                    <strong>No versions yet</strong>
+                    <p className="small">Every generated summary will be archived here with its prompt.</p>
+                  </div>
+                ) : null}
+                <div className="summary-version-list">
+                  {versions.map((version) => (
+                    <button
+                      className="summary-version-item"
+                      key={version.id}
+                      onClick={() => void openVersion(version.id)}
+                    >
+                      <div className="row between" style={{ gap: 8 }}>
+                        <strong className="small truncate">
+                          {version.title || 'Untitled summary'}
+                        </strong>
+                        <span className="tiny faint">{relativeTime(version.createdAt)}</span>
+                      </div>
+                      <span className="tiny faint">
+                        {formatDateTime(version.createdAt)}
+                        {version.model ? ` · ${version.model}` : ''}
+                        {version.mode ? ` · ${version.mode}` : ''}
+                        {` · ${version.charCount} chars`}
+                      </span>
+                      {version.instructions ? (
+                        <span className="tiny faint truncate">
+                          Instructions: {version.instructions}
+                        </span>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+                {versionLoading ? <Spinner label="Opening version…" /> : null}
+              </>
+            )}
           </div>
         )}
 

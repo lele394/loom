@@ -175,6 +175,12 @@ Executable checklist for Loom v1. Checked items are implemented and verified (20
   - global Calendar destination aggregates every project with a chronological Upcoming bar
   - month grid supports multi-day events, click-to-create, edit/delete, archived-project read-only state
   - calendar activity recorded in the project timeline; export/backup coverage and API tests
+- [x] **P3.22 Summary text scaling and version history** (extension, 2026-11-20)
+  - read-mode summary has independent persistent text scaling before the Copy action
+  - migration 014 archives each generated AI summary with model, mode, instructions and exact prompt
+  - Versions tab lists snapshots, opens full summary/prompt detail, and supports 250-character titles
+  - historical summaries are backfilled with a clear prompt-unavailable marker; export/backup covered
+  - API and generation tests verify version creation, prompt storage and title validation
 - [x] **P3.21 Read-mode AI summary redesign** (extension, 2026-11-20)
   - removed duplicated summary heading and permanently expanded generation form
   - summary now fills the dock with a readable 78ch measure and section hierarchy

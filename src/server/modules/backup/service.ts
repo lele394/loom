@@ -53,6 +53,7 @@ const RESTORE_TABLES = [
   'note_versions',
   'tasks',
   'literature',
+  'reference_summary_versions',
   'reference_bookmarks',
   'experiments',
   'questions',

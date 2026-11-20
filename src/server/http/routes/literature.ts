@@ -15,6 +15,7 @@ import {
   referenceUpdateSchema,
   reextractMetadataSchema,
   summarizeReferenceSchema,
+  summaryVersionUpdateSchema,
   urlIngestSchema,
   urlsIngestSchema,
 } from '../../../shared/schemas';
@@ -286,6 +287,23 @@ export async function literatureRoutes(app: FastifyInstance, ctx: Ctx): Promise<
       maxAttempts: 2,
     });
     return reply.status(202).send({ jobId });
+  });
+
+  app.get('/references/:id/summary-versions', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    return reply.send({ versions: ctx.services.literatureSummary.listVersions(id) });
+  });
+
+  app.get('/summary-versions/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    return reply.send(ctx.services.literatureSummary.getVersion(id));
+  });
+
+  app.patch('/summary-versions/:id', async (request, reply) => {
+    if (!request.user) throw new Error('unauthenticated');
+    const { id } = request.params as { id: string };
+    const input = parse(summaryVersionUpdateSchema, request.body);
+    return reply.send(ctx.services.literatureSummary.updateVersionTitle(id, input.title));
   });
 
   app.post('/references/:id/enrich', async (request, reply) => {

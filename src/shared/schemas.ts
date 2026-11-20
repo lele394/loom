@@ -345,6 +345,10 @@ export const summarizeReferenceSchema = z.object({
   instructions: z.string().max(4000).optional().default(''),
 });
 
+export const summaryVersionUpdateSchema = z.object({
+  title: z.string().trim().max(250),
+});
+
 export const bookmarkCreateSchema = z.object({
   page: z.number().int().min(1).max(50_000),
   note: z.string().max(250).optional().default(''),

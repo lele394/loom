@@ -235,6 +235,39 @@ describe('attachments and literature', () => {
     expect(updated.body.notes).toBe('My private note, not the summary.');
     expect(updated.body.aiSummaryInstructions).toBe('Focus on the method.');
     expect(updated.body.aiSummaryModel).toContain('summary@1');
+
+    const versions = await harness.request(
+      'GET',
+      `/references/${reference.body.id}/summary-versions`,
+    );
+    expect(versions.status).toBe(200);
+    expect(versions.body.versions).toHaveLength(1);
+    expect(versions.body.versions[0].title).toBe('');
+    expect(versions.body.versions[0].model).toContain('summary@1');
+
+    const version = await harness.request(
+      'GET',
+      `/summary-versions/${versions.body.versions[0].id}`,
+    );
+    expect(version.status).toBe(200);
+    expect(version.body.summaryMarkdown).toContain('## Summary');
+    expect(version.body.prompt).toContain('You are a research assistant');
+    expect(version.body.prompt).toContain('Focus on the method.');
+
+    const titled = await harness.request(
+      'PATCH',
+      `/summary-versions/${versions.body.versions[0].id}`,
+      { title: 'Methods-focused summary' },
+    );
+    expect(titled.status).toBe(200);
+    expect(titled.body.title).toBe('Methods-focused summary');
+
+    const tooLong = await harness.request(
+      'PATCH',
+      `/summary-versions/${versions.body.versions[0].id}`,
+      { title: 'x'.repeat(251) },
+    );
+    expect(tooLong.status).toBe(400);
   });
 
   it('stores, updates and removes PDF annotations', async () => {

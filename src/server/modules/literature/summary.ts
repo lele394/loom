@@ -5,6 +5,7 @@ import type { AttachmentService } from '../attachments/service';
 import type { ActivityService } from '../activity/service';
 import type { AppConfig } from '../../config';
 import { AppError, notFound } from '../../core/errors';
+import { newId } from '../../core/ids';
 import { createProvider } from '../../ai';
 import {
   SUMMARY_PROMPT_VERSION,
@@ -15,7 +16,7 @@ import { extractPdf } from '../../core/pdf';
 import { ocrWithTesseract, withPdfImages, type RenderedPdfPage } from '../../core/pdfImages';
 import { extractReadableText, safeFetch } from '../../core/net';
 import type { PdfMetadataMode } from '../../../shared/constants';
-import type { Reference } from '../../../shared/types';
+import type { Reference, SummaryVersion, SummaryVersionSummary } from '../../../shared/types';
 import { LiteratureService } from './service';
 
 export class LiteratureSummaryService {
@@ -178,12 +179,44 @@ export class LiteratureSummaryService {
 
     const model = `${config.chatModel || config.kind} (${SUMMARY_PROMPT_VERSION})`;
     const now = this.clock.iso();
-    this.db
-      .prepare(
-        `UPDATE literature SET ai_summary = ?, ai_summary_model = ?, ai_summary_at = ?, ai_summary_instructions = ?
-         WHERE id = ?`,
-      )
-      .run(summary, model, now, instructions, referenceId);
+    const promptText = input.images.length
+      ? [
+          prompt.system,
+          `[Image-based summary: ${input.images.length} page image(s) supplied]`,
+          typeof prompt.user === 'string'
+            ? prompt.user
+            : prompt.user
+                .filter((part) => part.type === 'text')
+                .map((part) => part.text)
+                .join('\n'),
+        ].join('\n\n')
+      : `${prompt.system}\n\n${prompt.user}`;
+    const tx = this.db.transaction(() => {
+      this.db
+        .prepare(
+          `UPDATE literature SET ai_summary = ?, ai_summary_model = ?, ai_summary_at = ?, ai_summary_instructions = ?
+           WHERE id = ?`,
+        )
+        .run(summary, model, now, instructions, referenceId);
+      this.db
+        .prepare(
+          `INSERT INTO reference_summary_versions
+             (id, reference_id, title, summary_md, prompt, model, mode, instructions, created_by, created_at)
+           VALUES (?, ?, '', ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          newId('sver'),
+          referenceId,
+          summary,
+          promptText,
+          model,
+          mode,
+          instructions,
+          options.actorId ?? this.primaryUserId(),
+          now,
+        );
+    });
+    tx();
     this.activity.record({
       actorId: options.actorId ?? this.primaryUserId(),
       projectId: row.project_id,
@@ -195,6 +228,87 @@ export class LiteratureSummaryService {
       source: 'job',
     });
     return summary;
+  }
+
+  listVersions(referenceId: string): SummaryVersionSummary[] {
+    this.literature.assertExists(referenceId);
+    const rows = this.db
+      .prepare(
+        `SELECT id, reference_id, title, model, mode, instructions,
+                length(summary_md) AS char_count, created_at
+         FROM reference_summary_versions
+         WHERE reference_id = ?
+         ORDER BY created_at DESC, id DESC`,
+      )
+      .all(referenceId) as {
+      id: string;
+      reference_id: string;
+      title: string;
+      model: string | null;
+      mode: string;
+      instructions: string;
+      char_count: number;
+      created_at: string;
+    }[];
+    return rows.map((row) => ({
+      id: row.id,
+      referenceId: row.reference_id,
+      title: row.title,
+      model: row.model,
+      mode: row.mode,
+      instructions: row.instructions,
+      charCount: row.char_count,
+      createdAt: row.created_at,
+    }));
+  }
+
+  getVersion(versionId: string): SummaryVersion {
+    const row = this.db
+      .prepare('SELECT * FROM reference_summary_versions WHERE id = ?')
+      .get(versionId) as
+      | {
+          id: string;
+          reference_id: string;
+          title: string;
+          summary_md: string;
+          prompt: string;
+          model: string | null;
+          mode: string;
+          instructions: string;
+          created_at: string;
+        }
+      | undefined;
+    if (!row) throw notFound('Summary version');
+    return {
+      id: row.id,
+      referenceId: row.reference_id,
+      title: row.title,
+      summaryMarkdown: row.summary_md,
+      prompt: row.prompt,
+      model: row.model,
+      mode: row.mode,
+      instructions: row.instructions,
+      charCount: row.summary_md.length,
+      createdAt: row.created_at,
+    };
+  }
+
+  updateVersionTitle(versionId: string, title: string): SummaryVersionSummary {
+    const version = this.getVersion(versionId);
+    const clean = title.trim().slice(0, 250);
+    this.db
+      .prepare('UPDATE reference_summary_versions SET title = ? WHERE id = ?')
+      .run(clean, versionId);
+    return {
+      id: version.id,
+      referenceId: version.referenceId,
+      title: clean,
+      model: version.model,
+      mode: version.mode,
+      instructions: version.instructions,
+      charCount: version.charCount,
+      createdAt: version.createdAt,
+    };
   }
 
   private primaryUserId(): string {

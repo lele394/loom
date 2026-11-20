@@ -297,6 +297,22 @@ export interface Reference {
   version: number;
 }
 
+export interface SummaryVersionSummary {
+  id: string;
+  referenceId: string;
+  title: string;
+  model: string | null;
+  mode: string;
+  instructions: string;
+  charCount: number;
+  createdAt: string;
+}
+
+export interface SummaryVersion extends SummaryVersionSummary {
+  summaryMarkdown: string;
+  prompt: string;
+}
+
 export interface ReferenceBookmark {
   id: string;
   referenceId: string;
