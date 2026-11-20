@@ -263,7 +263,12 @@ export function AiSummaryPanel({
     return (
       <div
         className="read-summary"
-        style={{ '--summary-scale': summaryScale } as CSSProperties}
+        style={
+          {
+            '--summary-scale': summaryScale,
+            '--summary-measure': `${Math.round(78 * 13.5 * summaryScale)}px`,
+          } as CSSProperties
+        }
       >
         <div className="read-summary-bar">
           <div className="read-summary-meta">
@@ -413,13 +418,13 @@ export function AiSummaryPanel({
                   </span>
                   <span className="tiny faint">{versionTitle.length}/250</span>
                 </div>
-                <div className="summary-version-summary">
-                  <Markdown text={selectedVersion.summaryMarkdown} />
-                </div>
                 <details className="summary-prompt-details">
                   <summary>Prompt used</summary>
                   <pre className="summary-prompt">{selectedVersion.prompt || '(not recorded)'}</pre>
                 </details>
+                <div className="summary-version-summary">
+                  <Markdown text={selectedVersion.summaryMarkdown} />
+                </div>
               </div>
             ) : (
               <>

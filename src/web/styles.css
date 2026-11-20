@@ -1582,7 +1582,7 @@ mark { background: var(--warning-soft); color: var(--text); padding: 0 2px; bord
 .read-summary-tabs .badge { padding: 0 4px; font-size: 9px; }
 .read-summary-body { flex: 1; min-height: 0; overflow: auto; padding: 18px 20px 32px; }
 .read-summary-body .md {
-  max-width: 78ch;
+  max-width: var(--summary-measure, 78ch);
   margin: 0 auto;
   font-size: calc(13.5px * var(--summary-scale, 1));
   line-height: 1.72;
@@ -1615,7 +1615,7 @@ mark { background: var(--warning-soft); color: var(--text); padding: 0 2px; bord
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-width: 78ch;
+  max-width: var(--summary-measure, 78ch);
   margin: 0 auto;
 }
 .summary-version-title-row { display: flex; align-items: center; gap: 6px; }

@@ -181,6 +181,7 @@ Executable checklist for Loom v1. Checked items are implemented and verified (20
   - Versions tab lists snapshots, opens full summary/prompt detail, and supports 250-character titles
   - historical summaries are backfilled with a clear prompt-unavailable marker; export/backup covered
   - API and generation tests verify version creation, prompt storage and title validation
+  - summary scale now widens the text measure proportionally; version prompt appears above the archived summary
 - [x] **P3.21 Read-mode AI summary redesign** (extension, 2026-11-20)
   - removed duplicated summary heading and permanently expanded generation form
   - summary now fills the dock with a readable 78ch measure and section hierarchy
