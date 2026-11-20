@@ -22,7 +22,8 @@ interface ProviderForm {
   chatModel: string;
   embedModel: string;
   rerankModel: string;
-  isDefault: boolean;
+  isChatDefault: boolean;
+  isEmbeddingDefault: boolean;
   hasApiKey?: boolean;
   apiKeyMasked?: string;
 }
@@ -35,7 +36,8 @@ const emptyProvider: ProviderForm = {
   chatModel: '',
   embedModel: '',
   rerankModel: '',
-  isDefault: false,
+  isChatDefault: false,
+  isEmbeddingDefault: false,
 };
 
 export function SettingsPage() {
@@ -307,6 +309,10 @@ function AiSection() {
           <div><div className="tiny faint">Embeddings</div><div className="small">{status.embeddings ? 'configured' : 'not configured'}</div></div>
           <div><div className="tiny faint">Coverage</div><div className="small">{status.embeddingCoverage.embedded}/{status.embeddingCoverage.chunks} chunks</div></div>
         </div>
+        <div className="tiny faint">
+          Chat default: {status.defaultProvider?.name ?? 'none'} · Embedding default:{' '}
+          {status.defaultEmbeddingProvider?.name ?? 'none'}
+        </div>
         {status.reasons.length ? <ul className="small mute" style={{ margin: 0, paddingLeft: 18 }}>{status.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul> : null}
         <div className="row">
           <button className="btn sm" onClick={() => void api.post('/search/reindex').then(() => toast('Reindex queued', 'success'))}>Rebuild index</button>
@@ -352,7 +358,16 @@ function AiSection() {
       <div className="card stack">
         <div className="row between">
           <h3 style={{ fontSize: 15 }}>Providers</h3>
-          <button className="btn primary sm" onClick={() => setEditing({ ...emptyProvider, isDefault: (providers.data ?? []).length === 0 })}>
+          <button
+            className="btn primary sm"
+            onClick={() =>
+              setEditing({
+                ...emptyProvider,
+                isChatDefault: (providers.data ?? []).length === 0,
+                isEmbeddingDefault: (providers.data ?? []).length === 0,
+              })
+            }
+          >
             <Icon name="plus" size={14} /> Add provider
           </button>
         </div>
@@ -368,7 +383,8 @@ function AiSection() {
               <div>
                 <div className="row" style={{ gap: 7 }}>
                   <strong className="small">{provider.name}</strong>
-                  {provider.isDefault ? <span className="badge accent">default</span> : null}
+                  {provider.isChatDefault ? <span className="badge accent">chat default</span> : null}
+                  {provider.isEmbeddingDefault ? <span className="badge info">embed default</span> : null}
                   <span className="badge">{provider.kind}</span>
                   {provider.hasApiKey ? <span className="badge success">key set</span> : null}
                 </div>
@@ -430,10 +446,28 @@ function AiSection() {
               <Field label="Chat model"><input className="input" value={editing.chatModel} onChange={(event) => setEditing({ ...editing, chatModel: event.target.value })} placeholder="llama3.1:8b" /></Field>
               <Field label="Embedding model" help="Required for semantic search."><input className="input" value={editing.embedModel} onChange={(event) => setEditing({ ...editing, embedModel: event.target.value })} placeholder="nomic-embed-text" /></Field>
             </div>
-            <label className="checkbox">
-              <input type="checkbox" checked={editing.isDefault} onChange={(event) => setEditing({ ...editing, isDefault: event.target.checked })} />
-              Use as default provider
-            </label>
+            <div className="grid-2">
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={editing.isChatDefault}
+                  onChange={(event) => setEditing({ ...editing, isChatDefault: event.target.checked })}
+                />
+                Default for chat
+              </label>
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={editing.isEmbeddingDefault}
+                  onChange={(event) => setEditing({ ...editing, isEmbeddingDefault: event.target.checked })}
+                />
+                Default for embeddings
+              </label>
+            </div>
+            <p className="tiny faint">
+              Chat and embedding defaults are independent. You can use a remote provider for chat and a local
+              provider for embeddings, or select the same provider for both.
+            </p>
           </div>
         </Modal>
       ) : null}

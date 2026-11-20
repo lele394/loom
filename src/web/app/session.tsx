@@ -7,7 +7,13 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { Appearance, Capabilities, PublicUser, SessionInfo } from '../../shared/types';
+import type {
+  AiProviderPublic,
+  Appearance,
+  Capabilities,
+  PublicUser,
+  SessionInfo,
+} from '../../shared/types';
 import { api, setCsrfToken } from '../shared/api';
 import { applyAppearance, DEFAULT_APPEARANCE, readLocalAppearance } from '../shared/theme';
 
@@ -21,6 +27,8 @@ export interface Meta {
     chat: boolean;
     embeddings: boolean;
     reasons: string[];
+    defaultProvider: AiProviderPublic | null;
+    defaultEmbeddingProvider: AiProviderPublic | null;
     embeddingCoverage: { chunks: number; embedded: number; model: string | null };
   };
   search: { chunks: number; embedded: number; model: string | null; objects: number; semanticAvailable: boolean };

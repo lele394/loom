@@ -469,6 +469,8 @@ export const aiProviderCreateSchema = z.object({
   embedModel: z.string().trim().max(120).optional().default(''),
   rerankModel: z.string().trim().max(120).optional().default(''),
   isDefault: z.boolean().optional().default(false),
+  isChatDefault: z.boolean().optional(),
+  isEmbeddingDefault: z.boolean().optional(),
   extra: z.record(z.string(), z.unknown()).optional().default({}),
 });
 
@@ -481,6 +483,8 @@ export const aiProviderUpdateSchema = z.object({
   embedModel: z.string().trim().max(120).optional(),
   rerankModel: z.string().trim().max(120).optional(),
   isDefault: z.boolean().optional(),
+  isChatDefault: z.boolean().optional(),
+  isEmbeddingDefault: z.boolean().optional(),
   extra: z.record(z.string(), z.unknown()).optional(),
 });
 

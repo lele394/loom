@@ -62,7 +62,7 @@ export class ExportService {
     const notes = objects.filter((object) => object.type === 'note');
     const users = this.db.prepare('SELECT id, username, display_name, is_admin, timezone, created_at, updated_at FROM users').all();
     const providers = this.db
-      .prepare('SELECT id, name, kind, base_url, chat_model, embed_model, rerank_model, is_default, extra_json, created_at, updated_at FROM ai_providers')
+      .prepare('SELECT id, name, kind, base_url, chat_model, embed_model, rerank_model, is_default, is_chat_default, is_embedding_default, extra_json, created_at, updated_at FROM ai_providers')
       .all();
     const conversations = this.db
       .prepare('SELECT * FROM conversations WHERE user_id = ? AND deleted_at IS NULL')

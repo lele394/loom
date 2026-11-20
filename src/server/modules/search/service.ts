@@ -363,7 +363,7 @@ export class SearchService {
 
   // ── Embeddings ─────────────────────────────────────────────────────────
   embeddingConfig(): { provider: AiProvider; model: string; modelKey: string } | null {
-    const config = this.settings.getProviderConfig();
+    const config = this.settings.getEmbeddingProviderConfig();
     if (!config || !config.embedModel) return null;
     if (config.kind === 'fake') {
       return {

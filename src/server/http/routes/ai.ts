@@ -26,7 +26,7 @@ export async function aiRoutes(app: FastifyInstance, ctx: Ctx): Promise<void> {
   app.post('/ai/providers', async (request, reply) => {
     const input = parse(aiProviderCreateSchema, request.body);
     const id = ctx.services.settings.createProvider(input);
-    if (input.embedModel) {
+    if (input.embedModel || input.isEmbeddingDefault) {
       ctx.jobs.enqueue('embed.chunks', {
         payload: {},
         idempotencyKey: `embed:providers:${Date.now()}`,
@@ -43,7 +43,7 @@ export async function aiRoutes(app: FastifyInstance, ctx: Ctx): Promise<void> {
     if (!ctx.services.settings.updateProvider(id, input)) {
       return reply.status(404).send({ error: { code: 'not_found', message: 'Provider not found.' } });
     }
-    if (input.embedModel) {
+    if (input.embedModel || input.isEmbeddingDefault) {
       ctx.jobs.enqueue('embed.chunks', {
         payload: {},
         idempotencyKey: `embed:providers:${Date.now()}`,

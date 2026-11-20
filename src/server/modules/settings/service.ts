@@ -33,6 +33,8 @@ export interface ProviderRow {
   embed_model: string;
   rerank_model: string;
   is_default: number;
+  is_chat_default: number;
+  is_embedding_default: number;
   extra_json: string;
   created_at: string;
   updated_at: string;
@@ -48,6 +50,8 @@ export interface ProviderConfig {
   embedModel: string;
   rerankModel: string;
   isDefault: boolean;
+  isChatDefault?: boolean;
+  isEmbeddingDefault?: boolean;
   extra: Record<string, unknown>;
 }
 
@@ -218,7 +222,11 @@ export class SettingsService {
 
   // ── AI providers ────────────────────────────────────────────────────────
   private providerRows(): ProviderRow[] {
-    return this.db.prepare('SELECT * FROM ai_providers ORDER BY is_default DESC, created_at ASC').all() as ProviderRow[];
+    return this.db
+      .prepare(
+        'SELECT * FROM ai_providers ORDER BY is_chat_default DESC, is_embedding_default DESC, created_at ASC',
+      )
+      .all() as ProviderRow[];
   }
 
   private toPublic(row: ProviderRow): {
@@ -232,6 +240,8 @@ export class SettingsService {
     embedModel: string;
     rerankModel: string;
     isDefault: boolean;
+    isChatDefault: boolean;
+    isEmbeddingDefault: boolean;
     extra: Record<string, unknown>;
   } {
     const apiKey = decryptSecret(row.api_key_enc, this.config.masterKey);
@@ -245,20 +255,14 @@ export class SettingsService {
       chatModel: row.chat_model,
       embedModel: row.embed_model,
       rerankModel: row.rerank_model,
-      isDefault: row.is_default === 1,
+      isDefault: row.is_chat_default === 1,
+      isChatDefault: row.is_chat_default === 1,
+      isEmbeddingDefault: row.is_embedding_default === 1,
       extra: parseJson<Record<string, unknown>>(row.extra_json, {}),
     };
   }
 
-  listProviders() {
-    return this.providerRows().map((row) => this.toPublic(row));
-  }
-
-  getProviderConfig(id?: string): ProviderConfig | null {
-    const row = id
-      ? (this.db.prepare('SELECT * FROM ai_providers WHERE id = ?').get(id) as ProviderRow | undefined)
-      : this.providerRows()[0];
-    if (!row) return null;
+  private toConfig(row: ProviderRow): ProviderConfig {
     return {
       id: row.id,
       name: row.name,
@@ -268,9 +272,52 @@ export class SettingsService {
       chatModel: row.chat_model,
       embedModel: row.embed_model,
       rerankModel: row.rerank_model,
-      isDefault: row.is_default === 1,
+      isDefault: row.is_chat_default === 1,
+      isChatDefault: row.is_chat_default === 1,
+      isEmbeddingDefault: row.is_embedding_default === 1,
       extra: parseJson<Record<string, unknown>>(row.extra_json, {}),
     };
+  }
+
+  listProviders() {
+    return this.providerRows().map((row) => this.toPublic(row));
+  }
+
+  getChatProviderConfig(): ProviderConfig | null {
+    const row =
+      (this.db
+        .prepare('SELECT * FROM ai_providers WHERE is_chat_default = 1 ORDER BY created_at ASC LIMIT 1')
+        .get() as ProviderRow | undefined) ??
+      (this.db
+        .prepare(
+          "SELECT * FROM ai_providers WHERE chat_model <> '' OR kind = 'fake' ORDER BY created_at ASC LIMIT 1",
+        )
+        .get() as ProviderRow | undefined) ??
+      this.providerRows()[0];
+    return row ? this.toConfig(row) : null;
+  }
+
+  getEmbeddingProviderConfig(): ProviderConfig | null {
+    const row =
+      (this.db
+        .prepare(
+          'SELECT * FROM ai_providers WHERE is_embedding_default = 1 ORDER BY created_at ASC LIMIT 1',
+        )
+        .get() as ProviderRow | undefined) ??
+      (this.db
+        .prepare(
+          "SELECT * FROM ai_providers WHERE embed_model <> '' ORDER BY created_at ASC LIMIT 1",
+        )
+        .get() as ProviderRow | undefined);
+    return row ? this.toConfig(row) : null;
+  }
+
+  getProviderConfig(id?: string): ProviderConfig | null {
+    if (!id) return this.getChatProviderConfig();
+    const row = this.db.prepare('SELECT * FROM ai_providers WHERE id = ?').get(id) as
+      | ProviderRow
+      | undefined;
+    return row ? this.toConfig(row) : null;
   }
 
   createProvider(input: {
@@ -282,18 +329,29 @@ export class SettingsService {
     embedModel?: string;
     rerankModel?: string;
     isDefault?: boolean;
+    isChatDefault?: boolean;
+    isEmbeddingDefault?: boolean;
     extra?: Record<string, unknown>;
   }) {
     const id = newId('aip');
     const now = this.clock.iso();
     const isFirst = this.providerRows().length === 0;
-    const shouldDefault = input.isDefault || isFirst;
+    const legacyDefault = input.isDefault === true;
+    const chatCapable = Boolean(input.chatModel) || input.kind === 'fake';
+    const embeddingCapable = Boolean(input.embedModel);
+    const chatDefault =
+      input.isChatDefault ?? ((legacyDefault || isFirst) && chatCapable);
+    const embeddingDefault =
+      input.isEmbeddingDefault ?? ((legacyDefault || isFirst) && embeddingCapable);
     const tx = this.db.transaction(() => {
-      if (shouldDefault) this.db.prepare('UPDATE ai_providers SET is_default = 0').run();
+      if (chatDefault) this.db.prepare('UPDATE ai_providers SET is_chat_default = 0').run();
+      if (embeddingDefault) this.db.prepare('UPDATE ai_providers SET is_embedding_default = 0').run();
       this.db
         .prepare(
-          `INSERT INTO ai_providers (id, name, kind, base_url, api_key_enc, chat_model, embed_model, rerank_model, is_default, extra_json, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO ai_providers
+             (id, name, kind, base_url, api_key_enc, chat_model, embed_model, rerank_model,
+              is_default, is_chat_default, is_embedding_default, extra_json, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           id,
@@ -304,7 +362,9 @@ export class SettingsService {
           input.chatModel ?? '',
           input.embedModel ?? '',
           input.rerankModel ?? '',
-          shouldDefault ? 1 : 0,
+          chatDefault ? 1 : 0,
+          chatDefault ? 1 : 0,
+          embeddingDefault ? 1 : 0,
           JSON.stringify(input.extra ?? {}),
           now,
           now,
@@ -325,13 +385,26 @@ export class SettingsService {
       embedModel?: string;
       rerankModel?: string;
       isDefault?: boolean;
+      isChatDefault?: boolean;
+      isEmbeddingDefault?: boolean;
       extra?: Record<string, unknown>;
     },
   ): boolean {
     const row = this.db.prepare('SELECT * FROM ai_providers WHERE id = ?').get(id) as ProviderRow | undefined;
     if (!row) return false;
+    const legacyDefault =
+      input.isDefault === undefined ? undefined : input.isDefault;
+    const chatDefault =
+      input.isChatDefault ?? legacyDefault ?? (row.is_chat_default === 1);
+    const embeddingDefault =
+      input.isEmbeddingDefault ?? legacyDefault ?? (row.is_embedding_default === 1);
     const tx = this.db.transaction(() => {
-      if (input.isDefault) this.db.prepare('UPDATE ai_providers SET is_default = 0').run();
+      if (chatDefault) {
+        this.db.prepare('UPDATE ai_providers SET is_chat_default = 0 WHERE id != ?').run(id);
+      }
+      if (embeddingDefault) {
+        this.db.prepare('UPDATE ai_providers SET is_embedding_default = 0 WHERE id != ?').run(id);
+      }
       const apiKeyEnc =
         input.apiKey === undefined || input.apiKey === ''
           ? row.api_key_enc
@@ -339,7 +412,8 @@ export class SettingsService {
       this.db
         .prepare(
           `UPDATE ai_providers SET name = ?, kind = ?, base_url = ?, api_key_enc = ?, chat_model = ?,
-             embed_model = ?, rerank_model = ?, is_default = ?, extra_json = ?, updated_at = ?
+             embed_model = ?, rerank_model = ?, is_default = ?, is_chat_default = ?,
+             is_embedding_default = ?, extra_json = ?, updated_at = ?
            WHERE id = ?`,
         )
         .run(
@@ -350,16 +424,30 @@ export class SettingsService {
           input.chatModel ?? row.chat_model,
           input.embedModel ?? row.embed_model,
           input.rerankModel ?? row.rerank_model,
-          input.isDefault === undefined ? row.is_default : input.isDefault ? 1 : 0,
+          chatDefault ? 1 : 0,
+          chatDefault ? 1 : 0,
+          embeddingDefault ? 1 : 0,
           JSON.stringify(input.extra ?? parseJson(row.extra_json, {})),
           this.clock.iso(),
           id,
         );
-      if (input.isDefault === false && row.is_default === 1) {
+      if (!chatDefault && row.is_chat_default === 1) {
         const next = this.db
-          .prepare('SELECT id FROM ai_providers WHERE id != ? ORDER BY created_at ASC LIMIT 1')
+          .prepare(
+            "SELECT id FROM ai_providers WHERE id != ? AND (chat_model <> '' OR kind = 'fake') ORDER BY created_at ASC LIMIT 1",
+          )
           .get(id) as { id: string } | undefined;
-        if (next) this.db.prepare('UPDATE ai_providers SET is_default = 1 WHERE id = ?').run(next.id);
+        if (next) this.db.prepare('UPDATE ai_providers SET is_chat_default = 1 WHERE id = ?').run(next.id);
+      }
+      if (!embeddingDefault && row.is_embedding_default === 1) {
+        const next = this.db
+          .prepare(
+            "SELECT id FROM ai_providers WHERE id != ? AND embed_model <> '' ORDER BY created_at ASC LIMIT 1",
+          )
+          .get(id) as { id: string } | undefined;
+        if (next) {
+          this.db.prepare('UPDATE ai_providers SET is_embedding_default = 1 WHERE id = ?').run(next.id);
+        }
       }
     });
     tx();
@@ -368,16 +456,28 @@ export class SettingsService {
 
   deleteProvider(id: string): boolean {
     const tx = this.db.transaction(() => {
-      const row = this.db.prepare('SELECT is_default FROM ai_providers WHERE id = ?').get(id) as
-        | { is_default: number }
+      const row = this.db.prepare('SELECT is_chat_default, is_embedding_default FROM ai_providers WHERE id = ?').get(id) as
+        | { is_chat_default: number; is_embedding_default: number }
         | undefined;
       if (!row) return false;
       this.db.prepare('DELETE FROM ai_providers WHERE id = ?').run(id);
-      if (row.is_default === 1) {
+      if (row.is_chat_default === 1) {
         const next = this.db
-          .prepare('SELECT id FROM ai_providers ORDER BY created_at ASC LIMIT 1')
+          .prepare(
+            "SELECT id FROM ai_providers WHERE chat_model <> '' OR kind = 'fake' ORDER BY created_at ASC LIMIT 1",
+          )
           .get() as { id: string } | undefined;
-        if (next) this.db.prepare('UPDATE ai_providers SET is_default = 1 WHERE id = ?').run(next.id);
+        if (next) this.db.prepare('UPDATE ai_providers SET is_chat_default = 1 WHERE id = ?').run(next.id);
+      }
+      if (row.is_embedding_default === 1) {
+        const next = this.db
+          .prepare(
+            "SELECT id FROM ai_providers WHERE embed_model <> '' ORDER BY created_at ASC LIMIT 1",
+          )
+          .get() as { id: string } | undefined;
+        if (next) {
+          this.db.prepare('UPDATE ai_providers SET is_embedding_default = 1 WHERE id = ?').run(next.id);
+        }
       }
       return true;
     });

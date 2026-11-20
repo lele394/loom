@@ -96,17 +96,25 @@ export class AiService {
   // ── Status and providers ───────────────────────────────────────────────
   status(): AiStatus {
     const providers = this.settings.listProviders();
-    const config = this.settings.getProviderConfig();
+    const chatConfig = this.settings.getChatProviderConfig();
+    const embeddingConfig = this.settings.getEmbeddingProviderConfig();
     const coverage = this.search.embeddingCoverage();
     const reasons: string[] = [];
-    if (!config) reasons.push('No AI provider is configured.');
-    else if (!config.chatModel && config.kind !== 'fake') reasons.push('No chat model is set.');
-    if (!config?.embedModel) reasons.push('No embedding model is set; semantic search is unavailable.');
+    if (!chatConfig) reasons.push('No chat provider is configured.');
+    else if (!chatConfig.chatModel && chatConfig.kind !== 'fake') reasons.push('No chat model is set.');
+    if (!embeddingConfig?.embedModel) {
+      reasons.push('No embedding model is set; semantic search is unavailable.');
+    }
     return {
-      configured: Boolean(config),
-      chat: Boolean(config && (config.chatModel || config.kind === 'fake')),
-      embeddings: Boolean(config?.embedModel),
-      defaultProvider: providers.find((provider) => provider.isDefault) ?? providers[0] ?? null,
+      configured: Boolean(chatConfig || embeddingConfig),
+      chat: Boolean(chatConfig && (chatConfig.chatModel || chatConfig.kind === 'fake')),
+      embeddings: Boolean(embeddingConfig?.embedModel),
+      defaultProvider:
+        providers.find((provider) => provider.id === chatConfig?.id) ??
+        providers.find((provider) => provider.isChatDefault) ??
+        null,
+      defaultEmbeddingProvider:
+        providers.find((provider) => provider.id === embeddingConfig?.id) ?? null,
       providers,
       embeddingCoverage: coverage,
       reasons,

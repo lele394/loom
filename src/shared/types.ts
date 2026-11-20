@@ -518,6 +518,8 @@ export interface AiProviderPublic {
   embedModel: string;
   rerankModel: string;
   isDefault: boolean;
+  isChatDefault: boolean;
+  isEmbeddingDefault: boolean;
   extra: Record<string, unknown>;
 }
 
@@ -526,6 +528,7 @@ export interface AiStatus {
   chat: boolean;
   embeddings: boolean;
   defaultProvider: AiProviderPublic | null;
+  defaultEmbeddingProvider: AiProviderPublic | null;
   providers: AiProviderPublic[];
   embeddingCoverage: { chunks: number; embedded: number; model: string | null };
   reasons: string[];

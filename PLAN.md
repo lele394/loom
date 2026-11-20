@@ -175,6 +175,12 @@ Executable checklist for Loom v1. Checked items are implemented and verified (20
   - global Calendar destination aggregates every project with a chronological Upcoming bar
   - month grid supports multi-day events, click-to-create, edit/delete, archived-project read-only state
   - calendar activity recorded in the project timeline; export/backup coverage and API tests
+- [x] **P3.18 Split chat and embedding defaults** (extension, 2026-11-20)
+  - migration 012 adds independent `is_chat_default` and `is_embedding_default` provider flags
+  - chat, journal/literature AI and embedding search resolve their own default providers
+  - Settings shows separate default badges and checkboxes; re-embedding is queued when the embedding default changes
+  - legacy single-default providers migrate sensibly, with fallbacks for chat-capable and embedding-capable providers
+  - API/status and search test cover a remote chat provider plus local embedding provider
 - [x] **P3.17 Journal personal notes** (extension, 2026-11-19)
   - per-user, per-day Markdown notes with autosave and explicit save for untracked work
   - notes are included as bounded context in the `digest@3` AI prompt, never as instructions
