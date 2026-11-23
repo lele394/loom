@@ -1,7 +1,7 @@
 {
   "name": "loom-research-os",
   "private": true,
-  "version": "0.1.37",
+  "version": "0.1.38",
   "description": "Loom — a personal research OS: projects, notes, literature, experiments, activity and cited AI.",
   "type": "module",
   "engines": {
@@ -22,6 +22,7 @@
     "seed": "tsx scripts/seed.ts",
     "backup": "tsx scripts/backup.ts",
     "migrate": "tsx scripts/migrate.ts",
+    "screenshots": "node scripts/capture-readme-screenshots.mjs",
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {

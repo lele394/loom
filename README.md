@@ -12,46 +12,84 @@ It is a modular monolith: one Node process, one SQLite database, one data direct
 
 ## Preview
 
-Explore the interface, features, and color palettes. Expand a section to see its screenshots; all images use fictional sample research data.
+One collapsible group per stock palette; each compares light and dark mode across the same four areas. Screenshots use fictional sample data and can be regenerated with `npm run screenshots` (requires Firefox and `geckodriver` on `PATH`).
 
 <details>
-<summary>Light mode · Lavender, Ocean, Sage, and Sakura</summary>
-<br />
-<p align="center">
-  <img src="docs/screenshots/dashboard-light.png" alt="Lavender light theme — Loom dashboard" width="49%" />
-  <img src="docs/screenshots/library-light.png" alt="Ocean light theme — global research library with project shelves" width="49%" />
-</p>
-<p align="center"><sub>Lavender · Dashboard &nbsp;&nbsp;|&nbsp;&nbsp; Ocean · Project-shelf Library</sub></p>
-<p align="center">
-  <img src="docs/screenshots/notes-light.png" alt="Sage light theme — structured research notes" width="49%" />
-  <img src="docs/screenshots/calendar-light.png" alt="Sakura light theme — cross-project calendar and upcoming research events" width="49%" />
-</p>
-<p align="center"><sub>Sage · Block notes &nbsp;&nbsp;|&nbsp;&nbsp; Sakura · Global Calendar</sub></p>
+<summary>Lavender</summary>
+<table>
+<thead><tr><th>Feature</th><th>Light</th><th>Dark</th></tr></thead>
+<tbody>
+<tr><th>Dashboard</th><td><img src="docs/screenshots/stock-themes/lavender/light-dashboard.png" alt="Lavender light dashboard" width="420" /></td><td><img src="docs/screenshots/stock-themes/lavender/dark-dashboard.png" alt="Lavender dark dashboard" width="420" /></td></tr>
+<tr><th>Library</th><td><img src="docs/screenshots/stock-themes/lavender/light-library.png" alt="Lavender light Library" width="420" /></td><td><img src="docs/screenshots/stock-themes/lavender/dark-library.png" alt="Lavender dark Library" width="420" /></td></tr>
+<tr><th>Project overview</th><td><img src="docs/screenshots/stock-themes/lavender/light-project-overview.png" alt="Lavender light project overview" width="420" /></td><td><img src="docs/screenshots/stock-themes/lavender/dark-project-overview.png" alt="Lavender dark project overview" width="420" /></td></tr>
+<tr><th>Literature</th><td><img src="docs/screenshots/stock-themes/lavender/light-literature.png" alt="Lavender light project literature" width="420" /></td><td><img src="docs/screenshots/stock-themes/lavender/dark-literature.png" alt="Lavender dark project literature" width="420" /></td></tr>
+</tbody>
+</table>
 </details>
 
 <details>
-<summary>Dark mode · Midnight and Sakura</summary>
-<br />
-<p align="center">
-  <img src="docs/screenshots/dashboard-dark.png" alt="Midnight dark theme — Loom dashboard" width="49%" />
-  <img src="docs/screenshots/library-dark.png" alt="Midnight dark theme — research library shelves" width="49%" />
-</p>
-<p align="center"><sub>Midnight · Dashboard &nbsp;&nbsp;|&nbsp;&nbsp; Midnight · Library</sub></p>
-<p align="center">
-  <img src="docs/screenshots/board-dark.png" alt="Sakura dark theme — project task board" width="49%" />
-  <img src="docs/screenshots/reader-dark.png" alt="Midnight dark theme — dockable PDF reading workspace" width="49%" />
-</p>
-<p align="center"><sub>Sakura · Project Board &nbsp;&nbsp;|&nbsp;&nbsp; Midnight · PDF reader with notes and bookmarks</sub></p>
+<summary>Sakura</summary>
+<table>
+<thead><tr><th>Feature</th><th>Light</th><th>Dark</th></tr></thead>
+<tbody>
+<tr><th>Dashboard</th><td><img src="docs/screenshots/stock-themes/sakura/light-dashboard.png" alt="Sakura light dashboard" width="420" /></td><td><img src="docs/screenshots/stock-themes/sakura/dark-dashboard.png" alt="Sakura dark dashboard" width="420" /></td></tr>
+<tr><th>Library</th><td><img src="docs/screenshots/stock-themes/sakura/light-library.png" alt="Sakura light Library" width="420" /></td><td><img src="docs/screenshots/stock-themes/sakura/dark-library.png" alt="Sakura dark Library" width="420" /></td></tr>
+<tr><th>Project overview</th><td><img src="docs/screenshots/stock-themes/sakura/light-project-overview.png" alt="Sakura light project overview" width="420" /></td><td><img src="docs/screenshots/stock-themes/sakura/dark-project-overview.png" alt="Sakura dark project overview" width="420" /></td></tr>
+<tr><th>Literature</th><td><img src="docs/screenshots/stock-themes/sakura/light-literature.png" alt="Sakura light project literature" width="420" /></td><td><img src="docs/screenshots/stock-themes/sakura/dark-literature.png" alt="Sakura dark project literature" width="420" /></td></tr>
+</tbody>
+</table>
 </details>
 
 <details>
-<summary>More features · palette settings and AI assistant</summary>
-<br />
-<p align="center">
-  <img src="docs/screenshots/appearance-light.png" alt="Appearance settings with light, dark, system, and palette choices" width="49%" />
-  <img src="docs/screenshots/ai-chat-light.png" alt="AI assistant dock with source scope and chat composer" width="49%" />
-</p>
-<p align="center"><sub>Appearance · Presets and custom palette &nbsp;&nbsp;|&nbsp;&nbsp; AI · Scope, context, and chat</sub></p>
+<summary>Sage</summary>
+<table>
+<thead><tr><th>Feature</th><th>Light</th><th>Dark</th></tr></thead>
+<tbody>
+<tr><th>Dashboard</th><td><img src="docs/screenshots/stock-themes/sage/light-dashboard.png" alt="Sage light dashboard" width="420" /></td><td><img src="docs/screenshots/stock-themes/sage/dark-dashboard.png" alt="Sage dark dashboard" width="420" /></td></tr>
+<tr><th>Library</th><td><img src="docs/screenshots/stock-themes/sage/light-library.png" alt="Sage light Library" width="420" /></td><td><img src="docs/screenshots/stock-themes/sage/dark-library.png" alt="Sage dark Library" width="420" /></td></tr>
+<tr><th>Project overview</th><td><img src="docs/screenshots/stock-themes/sage/light-project-overview.png" alt="Sage light project overview" width="420" /></td><td><img src="docs/screenshots/stock-themes/sage/dark-project-overview.png" alt="Sage dark project overview" width="420" /></td></tr>
+<tr><th>Literature</th><td><img src="docs/screenshots/stock-themes/sage/light-literature.png" alt="Sage light project literature" width="420" /></td><td><img src="docs/screenshots/stock-themes/sage/dark-literature.png" alt="Sage dark project literature" width="420" /></td></tr>
+</tbody>
+</table>
+</details>
+
+<details>
+<summary>Ocean</summary>
+<table>
+<thead><tr><th>Feature</th><th>Light</th><th>Dark</th></tr></thead>
+<tbody>
+<tr><th>Dashboard</th><td><img src="docs/screenshots/stock-themes/ocean/light-dashboard.png" alt="Ocean light dashboard" width="420" /></td><td><img src="docs/screenshots/stock-themes/ocean/dark-dashboard.png" alt="Ocean dark dashboard" width="420" /></td></tr>
+<tr><th>Library</th><td><img src="docs/screenshots/stock-themes/ocean/light-library.png" alt="Ocean light Library" width="420" /></td><td><img src="docs/screenshots/stock-themes/ocean/dark-library.png" alt="Ocean dark Library" width="420" /></td></tr>
+<tr><th>Project overview</th><td><img src="docs/screenshots/stock-themes/ocean/light-project-overview.png" alt="Ocean light project overview" width="420" /></td><td><img src="docs/screenshots/stock-themes/ocean/dark-project-overview.png" alt="Ocean dark project overview" width="420" /></td></tr>
+<tr><th>Literature</th><td><img src="docs/screenshots/stock-themes/ocean/light-literature.png" alt="Ocean light project literature" width="420" /></td><td><img src="docs/screenshots/stock-themes/ocean/dark-literature.png" alt="Ocean dark project literature" width="420" /></td></tr>
+</tbody>
+</table>
+</details>
+
+<details>
+<summary>Midnight</summary>
+<table>
+<thead><tr><th>Feature</th><th>Light</th><th>Dark</th></tr></thead>
+<tbody>
+<tr><th>Dashboard</th><td><img src="docs/screenshots/stock-themes/midnight/light-dashboard.png" alt="Midnight light dashboard" width="420" /></td><td><img src="docs/screenshots/stock-themes/midnight/dark-dashboard.png" alt="Midnight dark dashboard" width="420" /></td></tr>
+<tr><th>Library</th><td><img src="docs/screenshots/stock-themes/midnight/light-library.png" alt="Midnight light Library" width="420" /></td><td><img src="docs/screenshots/stock-themes/midnight/dark-library.png" alt="Midnight dark Library" width="420" /></td></tr>
+<tr><th>Project overview</th><td><img src="docs/screenshots/stock-themes/midnight/light-project-overview.png" alt="Midnight light project overview" width="420" /></td><td><img src="docs/screenshots/stock-themes/midnight/dark-project-overview.png" alt="Midnight dark project overview" width="420" /></td></tr>
+<tr><th>Literature</th><td><img src="docs/screenshots/stock-themes/midnight/light-literature.png" alt="Midnight light project literature" width="420" /></td><td><img src="docs/screenshots/stock-themes/midnight/dark-literature.png" alt="Midnight dark project literature" width="420" /></td></tr>
+</tbody>
+</table>
+</details>
+
+<details>
+<summary>Graphite</summary>
+<table>
+<thead><tr><th>Feature</th><th>Light</th><th>Dark</th></tr></thead>
+<tbody>
+<tr><th>Dashboard</th><td><img src="docs/screenshots/stock-themes/graphite/light-dashboard.png" alt="Graphite light dashboard" width="420" /></td><td><img src="docs/screenshots/stock-themes/graphite/dark-dashboard.png" alt="Graphite dark dashboard" width="420" /></td></tr>
+<tr><th>Library</th><td><img src="docs/screenshots/stock-themes/graphite/light-library.png" alt="Graphite light Library" width="420" /></td><td><img src="docs/screenshots/stock-themes/graphite/dark-library.png" alt="Graphite dark Library" width="420" /></td></tr>
+<tr><th>Project overview</th><td><img src="docs/screenshots/stock-themes/graphite/light-project-overview.png" alt="Graphite light project overview" width="420" /></td><td><img src="docs/screenshots/stock-themes/graphite/dark-project-overview.png" alt="Graphite dark project overview" width="420" /></td></tr>
+<tr><th>Literature</th><td><img src="docs/screenshots/stock-themes/graphite/light-literature.png" alt="Graphite light project literature" width="420" /></td><td><img src="docs/screenshots/stock-themes/graphite/dark-literature.png" alt="Graphite dark project literature" width="420" /></td></tr>
+</tbody>
+</table>
 </details>
 
 ---
@@ -206,6 +244,7 @@ The running version appears in the top bar. Settings → About can check the lat
 | --- | --- |
 | `npm run dev` | API + Vite with HMR |
 | `npm run build` | Build the SPA into `dist/web` |
+| `npm run screenshots` | Build and regenerate the README’s 48 stock-theme screenshots |
 | `npm start` | Production server |
 | `npm test` | Vitest suite (unit + integration, no network) |
 | `npm run test:coverage` | Same suite with a server coverage summary |
