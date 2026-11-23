@@ -1,7 +1,7 @@
 {
   "name": "loom-research-os",
   "private": true,
-  "version": "0.1.35",
+  "version": "0.1.36",
   "description": "Loom — a personal research OS: projects, notes, literature, experiments, activity and cited AI.",
   "type": "module",
   "engines": {
