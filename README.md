@@ -16,40 +16,40 @@ Explore the interface, features, and color palettes. Expand a section to see its
 
 <details>
 <summary>Light mode · Lavender, Ocean, Sage, and Sakura</summary>
-<br>
+<br />
 <p align="center">
-  <img src="docs/screenshots/dashboard-light.png" alt="Lavender light theme — Loom dashboard" width="49%">
-  <img src="docs/screenshots/library-light.png" alt="Ocean light theme — global research library with project shelves" width="49%">
+  <img src="docs/screenshots/dashboard-light.png" alt="Lavender light theme — Loom dashboard" width="49%" />
+  <img src="docs/screenshots/library-light.png" alt="Ocean light theme — global research library with project shelves" width="49%" />
 </p>
 <p align="center"><sub>Lavender · Dashboard &nbsp;&nbsp;|&nbsp;&nbsp; Ocean · Project-shelf Library</sub></p>
 <p align="center">
-  <img src="docs/screenshots/notes-light.png" alt="Sage light theme — structured research notes" width="49%">
-  <img src="docs/screenshots/calendar-light.png" alt="Sakura light theme — cross-project calendar and upcoming research events" width="49%">
+  <img src="docs/screenshots/notes-light.png" alt="Sage light theme — structured research notes" width="49%" />
+  <img src="docs/screenshots/calendar-light.png" alt="Sakura light theme — cross-project calendar and upcoming research events" width="49%" />
 </p>
 <p align="center"><sub>Sage · Block notes &nbsp;&nbsp;|&nbsp;&nbsp; Sakura · Global Calendar</sub></p>
 </details>
 
 <details>
 <summary>Dark mode · Midnight and Sakura</summary>
-<br>
+<br />
 <p align="center">
-  <img src="docs/screenshots/dashboard-dark.png" alt="Midnight dark theme — Loom dashboard" width="49%">
-  <img src="docs/screenshots/library-dark.png" alt="Midnight dark theme — research library shelves" width="49%">
+  <img src="docs/screenshots/dashboard-dark.png" alt="Midnight dark theme — Loom dashboard" width="49%" />
+  <img src="docs/screenshots/library-dark.png" alt="Midnight dark theme — research library shelves" width="49%" />
 </p>
 <p align="center"><sub>Midnight · Dashboard &nbsp;&nbsp;|&nbsp;&nbsp; Midnight · Library</sub></p>
 <p align="center">
-  <img src="docs/screenshots/board-dark.png" alt="Sakura dark theme — project task board" width="49%">
-  <img src="docs/screenshots/reader-dark.png" alt="Midnight dark theme — dockable PDF reading workspace" width="49%">
+  <img src="docs/screenshots/board-dark.png" alt="Sakura dark theme — project task board" width="49%" />
+  <img src="docs/screenshots/reader-dark.png" alt="Midnight dark theme — dockable PDF reading workspace" width="49%" />
 </p>
 <p align="center"><sub>Sakura · Project Board &nbsp;&nbsp;|&nbsp;&nbsp; Midnight · PDF reader with notes and bookmarks</sub></p>
 </details>
 
 <details>
 <summary>More features · palette settings and AI assistant</summary>
-<br>
+<br />
 <p align="center">
-  <img src="docs/screenshots/appearance-light.png" alt="Appearance settings with light, dark, system, and palette choices" width="49%">
-  <img src="docs/screenshots/ai-chat-light.png" alt="AI assistant dock with source scope and chat composer" width="49%">
+  <img src="docs/screenshots/appearance-light.png" alt="Appearance settings with light, dark, system, and palette choices" width="49%" />
+  <img src="docs/screenshots/ai-chat-light.png" alt="AI assistant dock with source scope and chat composer" width="49%" />
 </p>
 <p align="center"><sub>Appearance · Presets and custom palette &nbsp;&nbsp;|&nbsp;&nbsp; AI · Scope, context, and chat</sub></p>
 </details>
