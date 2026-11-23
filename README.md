@@ -10,6 +10,15 @@ It is a modular monolith: one Node process, one SQLite database, one data direct
 
 **Docs:** [`design_docs/`](design_docs/README.md) · [`PLAN.md`](PLAN.md) · [`conversation.md`](conversation.md)
 
+## Screenshots
+
+<div align="center">
+  <img src="docs/screenshots/dashboard.png" alt="Loom dashboard showing project cards, activity, and daily research overview" width="49%">
+  <img src="docs/screenshots/library.png" alt="Loom Library showing papers organized into project shelves" width="49%">
+</div>
+
+<p align="center"><sub>Dashboard and Library with fictional sample research data.</sub></p>
+
 ---
 
 ## Quick start
