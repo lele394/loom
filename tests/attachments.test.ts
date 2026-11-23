@@ -1,4 +1,5 @@
-import { createReadStream, writeFileSync } from 'node:fs';
+import { createReadStream, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -29,6 +30,16 @@ describe('attachments and literature', () => {
       harness.userId,
     );
     expect(attachment.kind).toBe('pdf');
+    const pdfHash = createHash('sha256')
+      .update(readFileSync(path.join(process.cwd(), 'tests/fixtures/paper.pdf')))
+      .digest('hex');
+    const duplicates = await harness.request('POST', '/references/pdf-duplicates', {
+      hashes: [pdfHash],
+    });
+    expect(duplicates.status).toBe(200);
+    expect(duplicates.body.duplicates).toEqual([
+      { hash: pdfHash, referenceId: reference.body.id, title: 'Energy efficient HPC' },
+    ]);
     await harness.drain();
 
     const envelope = await harness.request('GET', `/objects/${reference.body.id}`);

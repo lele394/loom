@@ -310,6 +310,10 @@ export const referenceUpdateSchema = z.object({
 
 export const pdfMetadataModeSchema = z.enum(PDF_METADATA_MODES);
 
+export const pdfDuplicateLookupSchema = z.object({
+  hashes: z.array(z.string().regex(/^[a-f0-9]{64}$/)).max(500),
+});
+
 export const urlIngestSchema = z.object({
   url: z.string().url().max(2048),
   projectId: z.union([id, z.null()]).optional().default(null),

@@ -24,8 +24,8 @@ export function ProjectCodePage() {
   );
   const commits = useAsync(
     () =>
-      api.get<{ commits: RepositoryCommit[] }>(
-        `/projects/${project.id}/repository-commits?limit=100`,
+      api.get<{ commits: RepositoryCommit[]; hasMore: boolean }>(
+        `/projects/${project.id}/repository-commits?limit=20&offset=0`,
       ),
     [project.id],
   );
@@ -34,6 +34,7 @@ export function ProjectCodePage() {
   const [token, setToken] = useState('');
   const [busy, setBusy] = useState(false);
   const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [loadingMoreCommits, setLoadingMoreCommits] = useState(false);
   const [tokenRepo, setTokenRepo] = useState<ProjectRepository | null>(null);
   const [replacementToken, setReplacementToken] = useState('');
   const [tokenBusy, setTokenBusy] = useState(false);
@@ -42,6 +43,25 @@ export function ProjectCodePage() {
   const reload = () => {
     repositories.reload();
     commits.reload();
+  };
+
+  const showMoreCommits = async () => {
+    const current = commits.data;
+    if (!current?.hasMore || loadingMoreCommits) return;
+    setLoadingMoreCommits(true);
+    try {
+      const next = await api.get<{ commits: RepositoryCommit[]; hasMore: boolean }>(
+        `/projects/${project.id}/repository-commits?limit=20&offset=${current.commits.length}`,
+      );
+      commits.setData({
+        commits: [...current.commits, ...next.commits],
+        hasMore: next.hasMore,
+      });
+    } catch (error) {
+      toast((error as Error).message, 'error');
+    } finally {
+      setLoadingMoreCommits(false);
+    }
   };
 
   const addRepository = async () => {
@@ -232,7 +252,7 @@ export function ProjectCodePage() {
             <strong className="small">Commit timeline</strong>
             <div className="tiny faint">Commits also appear in each day’s journal and project activity.</div>
           </div>
-          <button className="btn sm" onClick={() => commits.reload()}>Refresh</button>
+          <button className="btn sm" disabled={loadingMoreCommits} onClick={() => commits.reload()}>Refresh</button>
         </div>
         {commits.loading ? <Loading rows={4} /> : null}
         {commits.error ? <ErrorState error={commits.error} retry={commits.reload} /> : null}
@@ -260,8 +280,20 @@ export function ProjectCodePage() {
           </div>
         ))}
         {commitGroups.length ? (
-          <div className="tiny faint" style={{ marginTop: 12 }}>
-            Imported commits are timestamped by their git author date.
+          <div className="row between" style={{ marginTop: 12 }}>
+            <span className="tiny faint">
+              Showing {commits.data?.commits.length ?? 0} commits · timestamps use git author dates
+            </span>
+            {commits.data?.hasMore ? (
+              <button
+                className="btn sm"
+                disabled={loadingMoreCommits}
+                onClick={() => void showMoreCommits()}
+              >
+                {loadingMoreCommits ? <Spinner /> : null}
+                {loadingMoreCommits ? 'Loading…' : 'Show more'}
+              </button>
+            ) : null}
           </div>
         ) : null}
       </div>

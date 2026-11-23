@@ -50,7 +50,7 @@ Data lives in `./data` by default: `loom.db`, content-addressed attachments, bac
 | Calendar | Project calendars plus a global month view aggregating every project, type-coloured accents, upcoming bar, external `.ics` subscriptions |
 | Tasks | Configurable columns, drag-and-drop + keyboard moves, priorities, due dates, checklists |
 | Notes | Block editor, Markdown shortcuts, wikilinks, backlinks, versions, conflict-safe autosave, local draft recovery |
-| Literature | Drag-and-drop queues, bulk metadata re-extraction, AI-filled metadata, separate AI summaries and personal notes, a dedicated reading tab with dockable notes/bookmarks/summary/chat panels and saved PDF annotations, PDF/URL/BibTeX import, reading queue, DOI/Crossref enrichment |
+| Literature | Global Library organized into project shelves, SHA-256 PDF duplicate checks with review/skip/add-anyway choices, drag-and-drop queues, bulk metadata re-extraction, AI-filled metadata, separate AI summaries and personal notes, a dedicated reading tab with dockable notes/bookmarks/summary/chat panels and saved PDF annotations, PDF/URL/BibTeX import, reading queue, DOI/Crossref enrichment |
 | Experiments | Objective/hypothesis/method, environment key-values, metrics, results, datasets and CSV previews |
 | Questions | Open → investigating → answered, answer notes linked automatically |
 | Inbox | Global capture, triage into any object type, archive |
@@ -145,6 +145,14 @@ Copy `.env.example` to `.env`. Important variables:
 | `LOOM_MAX_STORAGE_GB` | `10` | Attachment quota |
 | `LOOM_LOG_LEVEL` | `info` | Pino level |
 | `LOOM_WORKER_ENABLED` | `true` | Background jobs |
+
+---
+
+## Versioning
+
+Loom uses `major.minor.commit` versions. Edit the first two fields in `package.json` for milestones; the trailing field is bumped automatically by the pre-commit hook and is never reset at a new major/minor. The hook also updates `package-lock.json`. `npm install` installs the repository's `.githooks` path; if you use a custom Git hook path, configure it to `.githooks` to enable automatic bumps.
+
+The running version appears in the top bar. Settings → About can check the latest commit on [GitHub](https://github.com/lele394/loom): blue means local is ahead, green means equal, orange means behind on the current/minor release line, and red means behind on a major version.
 
 ---
 

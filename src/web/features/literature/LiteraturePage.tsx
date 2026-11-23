@@ -35,6 +35,20 @@ interface PendingPdfIngest {
   createdAt: number;
 }
 
+interface PdfDuplicate {
+  index: number;
+  filename: string;
+  referenceId?: string;
+  title?: string;
+  duplicateOf?: string;
+}
+
+interface PdfImportReview {
+  files: File[];
+  duplicates: PdfDuplicate[];
+  destination: 'queue' | 'single';
+}
+
 interface ExtractionJob {
   id: string;
   referenceId: string;
@@ -75,6 +89,8 @@ export function LiteraturePage() {
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const dragCounter = useRef(0);
+  const [checkingPdfs, setCheckingPdfs] = useState(false);
+  const [pdfImportReview, setPdfImportReview] = useState<PdfImportReview | null>(null);
   const [ingesting, setIngesting] = useState<{ current: number; total: number } | null>(null);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const pendingRef = useRef<PendingPdfIngest[]>([]);
@@ -159,11 +175,10 @@ export function LiteraturePage() {
     return api.upload<Reference>(`/references/ingest-pdf${suffix}`, payload);
   };
 
-  const createFromPdf = async () => {
-    if (!pdfFile) return;
+  const importSinglePdf = async (file: File) => {
     setBusy(true);
     try {
-      const reference = await ingestPdfFile(pdfFile, pdfFile.name, pdfMode, projectId ?? null);
+      const reference = await ingestPdfFile(file, file.name, pdfMode, projectId ?? null);
       reset();
       setAddOpen(false);
       navigate(`/literature/${reference.id}`);
@@ -172,6 +187,11 @@ export function LiteraturePage() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const hashPdf = async (file: File): Promise<string> => {
+    const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+    return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
   };
 
   const updateQueueItem = (id: string, patch: Partial<QueueItem>) => {
@@ -269,6 +289,96 @@ export function LiteraturePage() {
     pendingRef.current.push(...entries);
     setQueue((current) => [...current, ...entries.map((entry) => entry.item)]);
     void pumpQueue();
+  };
+
+  const inspectPdfFiles = async (files: File[], destination: PdfImportReview['destination']) => {
+    if (checkingPdfs || pdfImportReview) return;
+    const pdfs = files.filter(
+      (file) => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'),
+    );
+    if (!pdfs.length) {
+      toast('Drop PDF files or a URL.', 'error');
+      return;
+    }
+    if (pdfs.length > 500) {
+      toast('Please add no more than 500 PDFs at once.', 'error');
+      return;
+    }
+    setCheckingPdfs(true);
+    try {
+      const hashes: string[] = [];
+      for (const file of pdfs) hashes.push(await hashPdf(file));
+      const { duplicates: existing } = await api.post<{
+        duplicates: { hash: string; referenceId: string; title: string }[];
+      }>('/references/pdf-duplicates', { hashes });
+      const existingByHash = new Map(existing.map((duplicate) => [duplicate.hash, duplicate]));
+      const firstByHash = new Map<string, number>();
+      const duplicates: PdfDuplicate[] = [];
+      hashes.forEach((hash, index) => {
+        const match = existingByHash.get(hash);
+        if (match) {
+          duplicates.push({
+            index,
+            filename: pdfs[index]!.name,
+            referenceId: match.referenceId,
+            title: match.title,
+          });
+          return;
+        }
+        const firstIndex = firstByHash.get(hash);
+        if (firstIndex !== undefined) {
+          duplicates.push({
+            index,
+            filename: pdfs[index]!.name,
+            duplicateOf: pdfs[firstIndex]!.name,
+          });
+        } else {
+          firstByHash.set(hash, index);
+        }
+      });
+      if (duplicates.length) {
+        setPdfImportReview({ files: pdfs, duplicates, destination });
+        if (destination === 'single') setAddOpen(false);
+      } else if (destination === 'single') {
+        await importSinglePdf(pdfs[0]!);
+      } else {
+        enqueuePdfFiles(pdfs);
+      }
+    } catch (error) {
+      toast((error as Error).message || 'Could not check for duplicate PDFs.', 'error');
+    } finally {
+      setCheckingPdfs(false);
+    }
+  };
+
+  const finishPdfReview = (addAnyway: boolean) => {
+    const review = pdfImportReview;
+    if (!review) return;
+    setPdfImportReview(null);
+    if (!addAnyway) {
+      const duplicateIndexes = new Set(review.duplicates.map((duplicate) => duplicate.index));
+      const uniqueFiles = review.files.filter((_file, index) => !duplicateIndexes.has(index));
+      toast(
+        `Skipped ${review.duplicates.length} duplicate PDF${review.duplicates.length === 1 ? '' : 's'}${uniqueFiles.length ? `; adding ${uniqueFiles.length} new PDF${uniqueFiles.length === 1 ? '' : 's'}` : ''}.`,
+        'success',
+      );
+      if (!uniqueFiles.length) return;
+      if (review.destination === 'single') {
+        void importSinglePdf(uniqueFiles[0]!);
+      } else {
+        enqueuePdfFiles(uniqueFiles);
+      }
+      return;
+    }
+    if (review.destination === 'single') {
+      void importSinglePdf(review.files[0]!);
+    } else {
+      enqueuePdfFiles(review.files);
+    }
+  };
+
+  const createFromPdf = () => {
+    if (pdfFile) void inspectPdfFiles([pdfFile], 'single');
   };
 
   const parseUrls = (raw: string): string[] =>
@@ -511,7 +621,7 @@ export function LiteraturePage() {
         setDragging(false);
         const files = [...event.dataTransfer.files];
         if (files.length) {
-          enqueuePdfFiles(files);
+          void inspectPdfFiles(files, 'queue');
           return;
         }
         if (ingesting) return;
@@ -538,6 +648,12 @@ export function LiteraturePage() {
               ? `Analyzing PDF ${ingesting.current}/${ingesting.total} and extracting metadata…`
               : 'Fetching the source and extracting metadata with AI…'}
           </span>
+        </div>
+      ) : null}
+      {checkingPdfs ? (
+        <div className="banner">
+          <Spinner />
+          <span>Checking PDF hashes against your literature…</span>
         </div>
       ) : null}
 
@@ -783,6 +899,63 @@ export function LiteraturePage() {
                     <option value="text">Extracted text</option>
                     <option value="images">Page images</option>
                   </select>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Modal>
+      ) : null}
+
+      {pdfImportReview ? (
+        <Modal
+          title={
+            pdfImportReview.duplicates.some((duplicate) => duplicate.referenceId)
+              ? pdfImportReview.duplicates.length === 1
+                ? 'PDF already in literature'
+                : 'Some PDFs are already in literature'
+              : 'Repeated PDFs detected'
+          }
+          description="Loom compares the PDF file contents, not just filenames."
+          onClose={() => setPdfImportReview(null)}
+          footer={
+            <>
+              <button className="btn" onClick={() => setPdfImportReview(null)}>Cancel</button>
+              <button className="btn" onClick={() => finishPdfReview(false)}>
+                {pdfImportReview.destination === 'single' ? 'Skip PDF' : 'Skip duplicates'}
+              </button>
+              <button className="btn primary" onClick={() => finishPdfReview(true)}>
+                Add anyway
+              </button>
+            </>
+          }
+        >
+          <div className="stack sm">
+            <p className="small muted">
+              {pdfImportReview.duplicates.some((duplicate) => duplicate.referenceId)
+                ? 'The following PDF content is already attached to a literature reference. Open an existing reference in a new tab, skip duplicate files, or add all files anyway. Checks use SHA-256 content hashes.'
+                : 'Some files in this drop have identical contents. Skip repeated copies or add every file anyway.'}
+            </p>
+            <div className="pdf-duplicate-list">
+              {pdfImportReview.duplicates.map((duplicate) => (
+                <div className="pdf-duplicate-row" key={`${duplicate.index}-${duplicate.filename}`}>
+                  <Icon name="book" size={14} />
+                  <span className="small truncate" title={duplicate.filename}>{duplicate.filename}</span>
+                  <span className="tiny faint">matches</span>
+                  {duplicate.referenceId ? (
+                    <a
+                      className="pdf-duplicate-link truncate"
+                      href={`/literature/${duplicate.referenceId}`}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      title={`Open ${duplicate.title ?? 'existing reference'} in a new tab`}
+                    >
+                      {duplicate.title || 'Open existing reference'}
+                    </a>
+                  ) : (
+                    <span className="tiny faint truncate" title={duplicate.duplicateOf}>
+                      {duplicate.duplicateOf ? `another dropped file: ${duplicate.duplicateOf}` : 'duplicate file'}
+                    </span>
+                  )}
                 </div>
               ))}
             </div>

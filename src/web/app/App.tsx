@@ -11,6 +11,7 @@ import { BoardPage } from '../features/tasks/BoardPage';
 import { NotesPage } from '../features/notes/NotesPage';
 import { NotePage } from '../features/notes/NotePage';
 import { LiteraturePage } from '../features/literature/LiteraturePage';
+import { LibraryPage } from '../features/literature/LibraryPage';
 import { ReferencePage } from '../features/literature/ReferencePage';
 import { ReadWindow } from '../features/literature/read/ReadWindow';
 import { ExperimentsPage } from '../features/experiments/ExperimentsPage';
@@ -50,6 +51,7 @@ export default function App() {
     <Shell>
       <Routes>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/library" element={<LibraryPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/inbox" element={<InboxPage />} />
         <Route path="/search" element={<SearchPage />} />

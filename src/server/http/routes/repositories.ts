@@ -60,18 +60,29 @@ export async function repositoryRoutes(app: FastifyInstance, ctx: Ctx): Promise<
     const query = request.query as {
       repositoryId?: string;
       limit?: string;
+      offset?: string;
       from?: string;
       to?: string;
     };
-    const limit = Math.min(200, Math.max(1, Number(query.limit) || 100));
+    const requestedLimit = Number(query.limit);
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(100, Math.floor(requestedLimit))
+      : 20;
+    const requestedOffset = Number(query.offset);
+    const offset = Number.isFinite(requestedOffset)
+      ? Math.min(1_000_000, Math.max(0, Math.floor(requestedOffset)))
+      : 0;
+    const page = ctx.services.repositories.listCommits({
+      projectId: id,
+      ...(query.repositoryId ? { repositoryId: query.repositoryId } : {}),
+      ...(query.from ? { from: query.from } : {}),
+      ...(query.to ? { to: query.to } : {}),
+      limit: limit + 1,
+      offset,
+    });
     return reply.send({
-      commits: ctx.services.repositories.listCommits({
-        projectId: id,
-        ...(query.repositoryId ? { repositoryId: query.repositoryId } : {}),
-        ...(query.from ? { from: query.from } : {}),
-        ...(query.to ? { to: query.to } : {}),
-        limit,
-      }),
+      commits: page.slice(0, limit),
+      hasMore: page.length > limit,
     });
   });
 }

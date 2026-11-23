@@ -105,6 +105,7 @@ export function CommandPalette({
       },
     },
     { id: 'dashboard', label: 'Dashboard', kind: 'Go', icon: 'dashboard', run: () => { onClose(); navigate('/'); } },
+    { id: 'library', label: 'Library', kind: 'Go', icon: 'book', run: () => { onClose(); navigate('/library'); } },
     { id: 'inbox', label: 'Inbox', kind: 'Go', icon: 'inbox', run: () => { onClose(); navigate('/inbox'); } },
     { id: 'journal', label: 'Journal', kind: 'Go', icon: 'journal', run: () => { onClose(); navigate('/journal'); } },
     { id: 'activity', label: 'Activity', kind: 'Go', icon: 'activity', run: () => { onClose(); navigate('/activity'); } },

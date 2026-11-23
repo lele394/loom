@@ -141,6 +141,21 @@ describe('project repositories', () => {
     );
     expect(projectCommits.body.commits).toHaveLength(2);
     expect(projectCommits.body.commits[0].message).toContain('benchmark');
+    expect(projectCommits.body.hasMore).toBe(false);
+
+    const firstPage = await harness.request(
+      'GET',
+      `/projects/${harness.projectId}/repository-commits?limit=1&offset=0`,
+    );
+    expect(firstPage.body.commits).toHaveLength(1);
+    expect(firstPage.body.hasMore).toBe(true);
+    const secondPage = await harness.request(
+      'GET',
+      `/projects/${harness.projectId}/repository-commits?limit=1&offset=1`,
+    );
+    expect(secondPage.body.commits).toHaveLength(1);
+    expect(secondPage.body.hasMore).toBe(false);
+    expect(secondPage.body.commits[0].id).not.toBe(firstPage.body.commits[0].id);
 
     const journal = await harness.request('GET', '/journal/2026-11-16');
     expect(journal.status).toBe(200);

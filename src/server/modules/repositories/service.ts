@@ -403,6 +403,7 @@ export class RepositoryService {
     projectId: string;
     repositoryId?: string;
     limit?: number;
+    offset?: number;
     from?: string;
     to?: string;
   }): RepositoryCommit[] {
@@ -427,10 +428,10 @@ export class RepositoryService {
          FROM repository_commits c
          JOIN project_repositories r ON r.id = c.repository_id
          WHERE ${clauses.join(' AND ')}
-         ORDER BY c.committed_at DESC
-         LIMIT ?`,
-      )
-      .all(...params, options.limit ?? 100) as (CommitRow & { repo_owner: string; repo_name: string })[];
+         ORDER BY c.committed_at DESC, c.id DESC
+         LIMIT ? OFFSET ?`,
+       )
+      .all(...params, options.limit ?? 100, options.offset ?? 0) as (CommitRow & { repo_owner: string; repo_name: string })[];
     return rows.map((item) => mapCommit(item, `${item.repo_owner}/${item.repo_name}`));
   }
 }

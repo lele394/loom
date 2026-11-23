@@ -180,6 +180,35 @@ export class LiteratureService {
     return this.map(id);
   }
 
+  findPdfDuplicates(hashes: string[]): { hash: string; referenceId: string; title: string }[] {
+    const uniqueHashes = [...new Set(hashes)];
+    if (!uniqueHashes.length) return [];
+    const rows = this.db
+      .prepare(
+        `SELECT a.blob_hash AS hash, o.id AS reference_id, o.title
+         FROM attachments a
+         JOIN objects o ON o.id = a.object_id
+         JOIN literature l ON l.id = o.id
+         WHERE a.kind = 'pdf'
+           AND o.type = 'reference'
+           AND o.deleted_at IS NULL
+           AND a.blob_hash IN (${uniqueHashes.map(() => '?').join(', ')})
+         ORDER BY a.created_at ASC`,
+      )
+      .all(...uniqueHashes) as { hash: string; reference_id: string; title: string }[];
+    const found = new Map<string, { hash: string; referenceId: string; title: string }>();
+    for (const row of rows) {
+      if (!found.has(row.hash)) {
+        found.set(row.hash, {
+          hash: row.hash,
+          referenceId: row.reference_id,
+          title: row.title,
+        });
+      }
+    }
+    return [...found.values()];
+  }
+
   list(filters: {
     projectId?: string;
     q?: string;

@@ -3,6 +3,10 @@ import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { deriveMasterKey, keyFingerprint } from './core/crypto';
 
+const packageVersion = (JSON.parse(
+  readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
+) as { version: string }).version;
+
 export interface AppConfig {
   env: string;
   port: number;
@@ -133,7 +137,7 @@ export function loadConfig(overrides: ConfigOverrides = {}): AppConfig {
       overrides.githubApiBase ??
       process.env.LOOM_GITHUB_API_BASE ??
       'https://api.github.com',
-    appVersion: '0.1.0',
+    appVersion: packageVersion,
   };
 }
 

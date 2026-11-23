@@ -48,6 +48,28 @@ interface ProviderForm {
   apiKeyMasked?: string;
 }
 
+interface VersionCheckResult {
+  localVersion: string;
+  latestVersion: string;
+  latestCommitSha: string;
+  latestCommitUrl: string;
+  latestCommittedAt: string | null;
+  checkedAt: string;
+}
+
+type VersionState = 'ahead' | 'latest' | 'behind-minor' | 'behind-major';
+
+function compareVersions(localVersion: string, latestVersion: string): VersionState {
+  const local = localVersion.split('.').map(Number);
+  const latest = latestVersion.split('.').map(Number);
+  for (let index = 0; index < 3; index++) {
+    if (local[index] === latest[index]) continue;
+    if (local[index]! > latest[index]!) return 'ahead';
+    return index === 0 ? 'behind-major' : 'behind-minor';
+  }
+  return 'latest';
+}
+
 const emptyProvider: ProviderForm = {
   name: '',
   kind: 'openai',
@@ -1242,6 +1264,34 @@ function AccountSection() {
 
 function AboutSection() {
   const { meta } = useSession();
+  const [versionCheck, setVersionCheck] = useState<VersionCheckResult | null>(null);
+  const [checkingVersion, setCheckingVersion] = useState(false);
+  const [versionCheckError, setVersionCheckError] = useState('');
+  const checkVersion = async () => {
+    setCheckingVersion(true);
+    setVersionCheckError('');
+    try {
+      setVersionCheck(await api.get<VersionCheckResult>('/meta/version-check?refresh=1'));
+    } catch (error) {
+      setVersionCheckError((error as Error).message);
+    } finally {
+      setCheckingVersion(false);
+    }
+  };
+  const versionState = versionCheck
+    ? compareVersions(versionCheck.localVersion, versionCheck.latestVersion)
+    : null;
+  const versionMessage = versionState === 'ahead'
+    ? 'This local build is ahead of the repository version.'
+    : versionState === 'latest'
+      ? 'You are running the latest repository version.'
+      : versionState === 'behind-major'
+        ? 'A newer major release is available.'
+        : versionState === 'behind-minor'
+          ? Number(versionCheck?.localVersion.split('.')[1]) < Number(versionCheck?.latestVersion.split('.')[1])
+            ? 'A newer minor release is available.'
+            : 'A newer commit is available on this release line.'
+          : '';
   return (
     <div className="stack">
       <div className="card stack">
@@ -1254,6 +1304,54 @@ function AboutSection() {
           <Link className="btn sm" to="/journal">Open the journal</Link>
           <Link className="btn sm" to="/activity">Activity timeline</Link>
         </div>
+      </div>
+      <div className="card stack">
+        <div className="row between">
+          <div>
+            <h3 style={{ fontSize: 15 }}>Version checker</h3>
+            <p className="small faint">Compare this running version with the latest commit on GitHub.</p>
+          </div>
+          <button className="btn sm" disabled={checkingVersion} onClick={() => void checkVersion()}>
+            <Icon name="refresh" size={13} />
+            {checkingVersion ? 'Checking…' : versionCheck ? 'Check again' : 'Check for updates'}
+          </button>
+        </div>
+        <div className="version-check-local">
+          <span className="tiny faint">RUNNING</span>
+          <strong>Loom - {meta?.version}</strong>
+        </div>
+        {versionCheckError ? (
+          <div className="version-check-error">
+            <Icon name="help" size={15} />
+            <span>{versionCheckError}</span>
+          </div>
+        ) : null}
+        {versionCheck && versionState ? (
+          <div className={`version-check-result ${versionState}`}>
+            <div className="version-check-result-icon">
+              <Icon
+                name={versionState === 'latest' ? 'check' : versionState === 'ahead' ? 'git' : 'download'}
+                size={16}
+              />
+            </div>
+            <div className="grow">
+              <strong>{versionMessage}</strong>
+              <div className="small">
+                Repository: <b>{versionCheck.latestVersion}</b>
+                {' · '}
+                <a href={versionCheck.latestCommitUrl} target="_blank" rel="noreferrer noopener">
+                  {versionCheck.latestCommitSha.slice(0, 7)}
+                </a>
+                {versionCheck.latestCommittedAt
+                  ? ` · ${formatDateTime(versionCheck.latestCommittedAt)}`
+                  : ''}
+              </div>
+            </div>
+          </div>
+        ) : null}
+        <p className="tiny faint">
+          Status colors: blue means local is ahead, green means current, orange means a newer commit/minor release is available, red means a newer major release is available.
+        </p>
       </div>
       <div className="card">
         <h3 style={{ fontSize: 15 }}>Keyboard</h3>

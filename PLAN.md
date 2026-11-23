@@ -315,7 +315,7 @@ Executable checklist for Loom v1. Checked items are implemented and verified (20
 - [x] **P9.5 Dashboard**: greeting, stats, projects, due tasks, inbox, yesterday digest, recent activity, capabilities banner
 - [x] **P9.6 Projects/board**: project CRUD/archive, overview, favourites, tags, Kanban with DnD + keyboard move, quick add
 - [x] **P9.7 Notes**: list/filters/templates, editor (block types, markdown shortcuts, autosave, conflict dialog, localStorage draft + recovery banner), versions, links/backlinks, AI actions, export
-- [x] **P9.8 Literature**: table/filters, add dialog (PDF/URL/manual/BibTeX), detail (metadata, PDF iframe, attachments, reading status, AI), export
+- [x] **P9.8 Literature**: table/filters, add dialog (PDF/URL/manual/BibTeX), SHA-256 PDF duplicate review (open existing reference, skip, or add anyway), detail (metadata, PDF iframe, attachments, reading status, AI), export
 - [x] **P9.9 Experiments/questions**: list/detail forms, metrics/env editors, CSV preview, answer flow
 - [x] **P9.10 Inbox + quick capture**: global hotkey modal, triage to object type
 - [x] **P9.11 Search + command palette**: results, filters, suggestions/recent, actions, keyboard nav

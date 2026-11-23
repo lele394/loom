@@ -9,6 +9,7 @@ import {
   bulkReextractMetadataSchema,
   pdfAnnotationCreateSchema,
   pdfAnnotationUpdateSchema,
+  pdfDuplicateLookupSchema,
   pdfMetadataModeSchema,
   referenceCreateSchema,
   referenceListQuerySchema,
@@ -52,6 +53,12 @@ export async function literatureRoutes(app: FastifyInstance, ctx: Ctx): Promise<
     if (!request.user) throw new Error('unauthenticated');
     const input = parse(referenceCreateSchema, request.body);
     return reply.status(201).send(ctx.services.literature.create(input, request.user.id));
+  });
+
+  app.post('/references/pdf-duplicates', async (request, reply) => {
+    if (!request.user) throw new Error('unauthenticated');
+    const input = parse(pdfDuplicateLookupSchema, request.body);
+    return reply.send({ duplicates: ctx.services.literature.findPdfDuplicates(input.hashes) });
   });
 
   app.get('/references/:id', async (request, reply) => {

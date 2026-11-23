@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Ctx } from '../../ctx';
 import type { AppCapabilities } from '../capabilities';
 import { addDays, todayIn } from '../../core/time';
+import { latestLoomVersion } from '../../core/version';
 import type { DashboardData } from '../../../shared/types';
 
 export async function metaRoutes(app: FastifyInstance, ctx: Ctx): Promise<void> {
@@ -32,6 +33,20 @@ export async function metaRoutes(app: FastifyInstance, ctx: Ctx): Promise<void> 
       search,
       app: ctx.services.settings.getApp(),
       user: request.user,
+    });
+  });
+
+  app.get('/meta/version-check', async (request, reply) => {
+    if (!request.user) throw new Error('unauthenticated');
+    const query = request.query as { refresh?: string };
+    const latest = await latestLoomVersion(query.refresh === '1');
+    return reply.send({
+      localVersion: ctx.config.appVersion,
+      latestVersion: latest.version,
+      latestCommitSha: latest.commitSha,
+      latestCommitUrl: latest.commitUrl,
+      latestCommittedAt: latest.committedAt,
+      checkedAt: new Date().toISOString(),
     });
   });
 

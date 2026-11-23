@@ -14,6 +14,7 @@ import { NewProjectModal } from '../shared/components';
 
 const NAV: { to: string; label: string; icon: IconName; exact?: boolean }[] = [
   { to: '/', label: 'Dashboard', icon: 'dashboard', exact: true },
+  { to: '/library', label: 'Library', icon: 'book', exact: true },
   { to: '/calendar', label: 'Calendar', icon: 'calendar' },
   { to: '/inbox', label: 'Inbox', icon: 'inbox' },
   { to: '/journal', label: 'Journal', icon: 'journal' },
@@ -27,7 +28,7 @@ function ShortcutsModal({ open, onClose }: { open: boolean; onClose: () => void 
     ['Ctrl / ⌘ + Shift + Space', 'Quick capture'],
     ['N', 'New note in the current project'],
     ['T', 'New task in the current project'],
-    ['G then D / I / J / A', 'Dashboard / Inbox / Journal / Activity'],
+    ['G then D / L / I / J / A', 'Dashboard / Library / Inbox / Journal / Activity'],
     ['?', 'This help'],
     ['Esc', 'Close overlays'],
   ];
@@ -102,7 +103,7 @@ export function Shell({ children }: { children: ReactNode }) {
         const next = (nextEvent: KeyboardEvent) => {
           window.clearTimeout(timer);
           window.removeEventListener('keydown', next);
-          const map: Record<string, string> = { d: '/', i: '/inbox', j: '/journal', a: '/activity' };
+            const map: Record<string, string> = { d: '/', l: '/library', i: '/inbox', j: '/journal', a: '/activity' };
           const target = map[nextEvent.key.toLowerCase()];
           if (target) navigate(target);
         };
@@ -196,6 +197,9 @@ export function Shell({ children }: { children: ReactNode }) {
             <Icon name="sparkles" />
           </button>
           <div className="spacer" />
+          <span className="topbar-version" title={`Loom version ${meta?.version ?? ''}`}>
+            Loom - {meta?.version ?? '…'}
+          </span>
           <span className="hide-sm small muted">{meta?.app.instanceName}</span>
           <Menu
             trigger={
